@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hệ thống Kiểm tra Chống Gian lận</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f8fafc;
+            color: #334155;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: #0f172a;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .quiz-option {
+            display: block;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .quiz-option:hover {
+            background: #f1f5f9;
+        }
+
+        .result-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-log {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+    </style>
+    <script defer src="https://openfpcdn.io/fingerprintjs/v3/iife.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Hệ thống Trắc nghiệm</h1>
+        <div id="login">
+            <p>Vui lòng nhập MSSV để điểm danh.</p>
+            <input id="mssv" type="text" placeholder="Nhập MSSV (ví dụ: 23020643)" />
+            <button id="startBtn" disabled>Đang kết nối...</button>
+            <div id="log" class="status-log">Trạng thái: Đang tải...</div>
+        </div>
+        <div id="quiz" style="display: none;"></div>
+        <div id="result" style="display: none; text-align: center;">
+            <div class="result-icon">✅</div>
+            <h2 style="color: #166534;">Đã nộp bài!</h2>
+            <p>Hệ thống đã ghi nhận câu trả lời.</p>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const startBtn = document.getElementById('startBtn');
+            const mssvInput = document.getElementById('mssv');
+            const loginDiv = document.getElementById('login');
+            const quizDiv = document.getElementById('quiz');
+            const resultDiv = document.getElementById('result');
+            const logEl = document.getElementById('log');
+
+            let visitorId = null;
+            let ws = null;
+
+            function log(msg) { logEl.textContent = msg; }
+
+            function initWebSocket() {
+                // --- SỬA LỖI TẠI ĐÂY: Xử lý trường hợp mở file trực tiếp ---
+                let host = window.location.host;
+                // Nếu host rỗng (do mở file://), mặc định trỏ về localhost:8080
+                if (!host) host = 'localhost:8080';
+
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${host}`;
+
+                console.log("Connecting to:", wsUrl);
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    log("WebSocket đã kết nối.");
+                    checkReady();
+                };
+                ws.onmessage = (ev) => {
+                    let data = {}; try { data = JSON.parse(ev.data); } catch (_) { }
+                    if (data.status === 'OK') {
+                        loginDiv.style.display = 'none';
+                        quizDiv.style.display = 'block';
+                        renderQuiz();
+                    } else if (data.status === 'BLOCKED') {
+                        alert('CHẶN: ' + data.msg);
+                        window.location.reload();
+                    }
+                };
+                ws.onclose = () => { log("Mất kết nối Server (Kiểm tra xem server đã bật chưa?)"); };
+                ws.onerror = (err) => { console.error("Socket error:", err); };
+            }
+
+            async function initFingerprint() {
+                log("Đang lấy Fingerprint...");
+                let retries = 0;
+                // Chờ tối đa 3 giây
+                while (!window.FingerprintJS && retries < 30) {
+                    await new Promise(r => setTimeout(r, 100));
+                    retries++;
+                }
+
+                try {
+                    if (window.FingerprintJS) {
+                        const fp = await FingerprintJS.load();
+                        const result = await fp.get();
+                        visitorId = result.visitorId;
+                        log("Đã lấy được Device ID.");
+                    } else {
+                        throw new Error("Timeout");
+                    }
+                } catch (e) {
+                    console.warn("Fingerprint blocked, using fallback.");
+                    visitorId = "fallback-" + Math.random().toString(36).substring(2) + Date.now();
+                    log("Dùng ID dự phòng.");
+                }
+                checkReady();
+            }
+
+            function checkReady() {
+                if (visitorId && ws && ws.readyState === WebSocket.OPEN) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = "Bắt đầu làm bài";
+                    log("Sẵn sàng.");
+                }
+            }
+
+            startBtn.addEventListener('click', () => {
+                const mssv = mssvInput.value.trim();
+                if (!mssv) return alert('Nhập MSSV!');
+                ws.send(JSON.stringify({ type: 'LOGIN', mssv, fingerprint: visitorId }));
+            });
+
+            function renderQuiz() {
+                quizDiv.innerHTML = `
+                <h2>Câu hỏi 1</h2><p>1 + 1 = ?</p>
+                <label class="quiz-option"><input type="radio" name="q1" value="A"> A. 1</label>
+                <label class="quiz-option"><input type="radio" name="q1" value="B"> B. 2</label>
+                <label class="quiz-option"><input type="radio" name="q1" value="C"> C. 3</label>
+                <label class="quiz-option"><input type="radio" name="q1" value="D"> D. 4</label>
+                <button id="submitBtn" style="margin-top:15px">Nộp bài</button>
+            `;
+                document.getElementById('submitBtn').addEventListener('click', () => {
+                    const checked = document.querySelector('input[name="q1"]:checked');
+                    if (!checked) return alert('Chọn đáp án!');
+                    ws.send(JSON.stringify({ type: 'SUBMIT', mssv: mssvInput.value.trim(), answer: checked.value }));
+                    quizDiv.style.display = 'none'; resultDiv.style.display = 'block';
+                });
+            }
+
+            initWebSocket();
+            initFingerprint();
+        })();
+    </script>
+</body>
+
+</html>
