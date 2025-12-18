@@ -13,12 +13,22 @@ GameManager game;
 // Hàm đọc file tổng quát
 std::string load_file(const std::string &filename)
 {
-    std::ifstream f(filename);
-    if (!f.is_open())
-        return "";
-    std::stringstream buffer;
-    buffer << f.rdbuf();
-    return buffer.str();
+    // Paths để tìm file
+    std::vector<std::string> paths = {
+        "web/" + filename,           // Chạy từ root
+        "../web/" + filename,        // Chạy từ build/
+        filename                     // Fallback
+    };
+    
+    for (const auto &path : paths) {
+        std::ifstream f(path);
+        if (f.is_open()) {
+            std::stringstream buffer;
+            buffer << f.rdbuf();
+            return buffer.str();
+        }
+    }
+    return "";  // File not found
 }
 
 // Logic Firewall
