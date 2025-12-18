@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Giám Sát Thi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #0f172a;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .badge {
+            background: #2563eb;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        /* Bảng */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th {
+            text-align: left;
+            color: #64748b;
+            font-size: 0.85rem;
+            padding: 10px;
+            background: #f8fafc;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.95rem;
+        }
+
+        /* Màu sắc trạng thái */
+        .status-ok {
+            color: #166534;
+            font-weight: 600;
+        }
+
+        .status-block {
+            color: #dc2626;
+            font-weight: 600;
+            background: #fef2f2;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: #94a3b8;
+            padding: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>
+            Trung Tâm Giám Sát
+            <span id="connStatus" class="badge" style="background:#94a3b8">Connecting...</span>
+        </h1>
+
+        <div class="grid">
+            <div class="card">
+                <h2 style="color: #166534;">✅ Danh sách đã nộp bài</h2>
+                <table id="tableSubmit">
+                    <thead>
+                        <tr>
+                            <th>MSSV</th>
+                            <th>IP</th>
+                            <th>Đáp án</th>
+                            <th>Thời gian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+                <div id="emptySubmit" class="empty-msg">Chưa có ai nộp bài</div>
+            </div>
+
+            <div class="card">
+                <h2 style="color: #dc2626;">⛔ Nhật ký Gian lận / Bị chặn</h2>
+                <table id="tableBlock">
+                    <thead>
+                        <tr>
+                            <th>MSSV (Nếu có)</th>
+                            <th>IP Thật</th>
+                            <th>Lý do chặn</th>
+                            <th>Thời gian</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+                <div id="emptyBlock" class="empty-msg">Chưa phát hiện gian lận</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}`;
+        const ws = new WebSocket(wsUrl);
+        const statusBadge = document.getElementById('connStatus');
+
+        ws.onopen = () => {
+            statusBadge.textContent = "Hệ thống Online";
+            statusBadge.style.background = "#166534";
+            // Gửi lệnh đăng nhập quyền Admin
+            ws.send(JSON.stringify({ type: 'ADMIN_LOGIN', key: 'admin_secret' }));
+        };
+
+        ws.onclose = () => {
+            statusBadge.textContent = "Mất kết nối";
+            statusBadge.style.background = "#dc2626";
+        };
+
+        ws.onmessage = (ev) => {
+            let data = {};
+            try { data = JSON.parse(ev.data); } catch (e) { return; }
+
+            if (data.type === 'NEW_SUBMISSION') {
+                addRow('tableSubmit', 'emptySubmit', [
+                    data.mssv,
+                    data.ip,
+                    `<span style="font-weight:bold">${data.answer}</span>`,
+                    new Date().toLocaleTimeString()
+                ]);
+            }
+            else if (data.type === 'NEW_BLOCK') {
+                addRow('tableBlock', 'emptyBlock', [
+                    data.mssv || '---',
+                    `<span class="status-block">${data.ip}</span>`,
+                    data.reason,
+                    new Date().toLocaleTimeString()
+                ]);
+            }
+        };
+
+        function addRow(tableId, emptyId, columns) {
+            document.getElementById(emptyId).style.display = 'none';
+            const tbody = document.querySelector(`#${tableId} tbody`);
+            const tr = document.createElement('tr');
+
+            // Hiệu ứng nháy vàng khi có tin mới
+            tr.style.backgroundColor = '#fef08a';
+            setTimeout(() => tr.style.backgroundColor = 'transparent', 2000);
+
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                td.innerHTML = col;
+                tr.appendChild(td);
+            });
+            // Thêm vào đầu danh sách
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+    </script>
+</body>
+
+</html>

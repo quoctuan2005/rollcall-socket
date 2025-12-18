@@ -3,126 +3,314 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hệ thống Kiểm tra Chống Gian lận</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Hệ thống Kiểm tra Online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #f8fafc;
-            color: #334155;
-            display: flex;
-            justify-content: center;
-            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
             margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 20px;
         }
 
         .container {
             width: 100%;
-            max-width: 600px;
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            height: fit-content;
+            max-width: 500px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Thanh trạng thái kết nối */
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-sub);
+            background: #f8fafc;
+            padding: 4px 10px;
+            border-radius: 99px;
+            border: 1px solid var(--border);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background-color: #cbd5e1;
+            /* Mặc định xám */
+        }
+
+        .dot.online {
+            background-color: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .dot.offline {
+            background-color: var(--error);
         }
 
         h1 {
-            margin-top: 0;
+            margin: 0 0 8px 0;
             font-size: 1.5rem;
-            color: #0f172a;
+            font-weight: 700;
+            color: var(--text-main);
+            text-align: center;
         }
 
-        input {
+        .subtitle {
+            text-align: center;
+            color: var(--text-sub);
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+
+        /* Form Input */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"] {
             width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            box-sizing: border-box;
+            padding: 14px 16px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
             font-size: 1rem;
+            outline: none;
+            transition: all 0.2s;
+            box-sizing: border-box;
+            background: #f8fafc;
         }
 
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        /* Buttons */
         button {
             width: 100%;
-            padding: 12px;
-            background: #0f172a;
+            padding: 14px;
+            background-color: var(--primary);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
         button:disabled {
-            background: #94a3b8;
+            background-color: #94a3b8;
             cursor: not-allowed;
+            opacity: 0.8;
         }
 
-        .quiz-option {
-            display: block;
-            padding: 10px;
-            margin: 8px 0;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
+        /* Quiz Styles */
+        .quiz-question {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .option-card {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
             cursor: pointer;
+            transition: all 0.2s;
         }
 
-        .quiz-option:hover {
-            background: #f1f5f9;
+        .option-card:hover {
+            border-color: var(--primary);
+            background-color: #eff6ff;
         }
 
-        .result-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
+        .option-card input {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
         }
 
+        /* Result Styles */
+        .result-container {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            background: #dcfce7;
+            color: #166534;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin: 0 auto 20px auto;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        button:disabled .spinner {
+            display: block;
+        }
+
+        /* Notification/Log */
         .status-log {
-            font-size: 0.85rem;
-            color: #64748b;
-            margin-top: 10px;
-            font-family: monospace;
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            text-align: center;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        /* Ẩn hiện các phần */
+        .hidden {
+            display: none;
         }
     </style>
+
     <script defer src="https://openfpcdn.io/fingerprintjs/v3/iife.min.js"></script>
 </head>
 
 <body>
     <div class="container">
-        <h1>Hệ thống Trắc nghiệm</h1>
-        <div id="login">
-            <p>Vui lòng nhập MSSV để điểm danh.</p>
-            <input id="mssv" type="text" placeholder="Nhập MSSV (ví dụ: 23020643)" />
-            <button id="startBtn" disabled>Đang kết nối...</button>
-            <div id="log" class="status-log">Trạng thái: Đang tải...</div>
+        <div class="connection-status">
+            <div id="connDot" class="dot"></div>
+            <span id="connText">Connecting...</span>
         </div>
-        <div id="quiz" style="display: none;"></div>
-        <div id="result" style="display: none; text-align: center;">
-            <div class="result-icon">✅</div>
-            <h2 style="color: #166534;">Đã nộp bài!</h2>
-            <p>Hệ thống đã ghi nhận câu trả lời.</p>
+
+        <h1>Bài Thi Trực Tuyến</h1>
+        <div class="subtitle">Hệ thống giám sát & chống gian lận</div>
+
+        <div id="login">
+            <div class="form-group">
+                <label for="mssv">Mã số sinh viên</label>
+                <input id="mssv" type="text" placeholder="Nhập MSSV (VD: 23020643)" autocomplete="off" />
+            </div>
+
+            <button id="startBtn" disabled>
+                <div class="spinner"></div>
+                <span id="btnText">Đang khởi tạo...</span>
+            </button>
+
+            <div id="log" class="status-log">Đang tải thư viện bảo mật...</div>
+        </div>
+
+        <div id="quiz" class="hidden">
+        </div>
+
+        <div id="result" class="hidden result-container">
+            <div class="icon-circle">✓</div>
+            <h2 style="color: #166534; margin: 0 0 10px 0;">Nộp bài thành công!</h2>
+            <p style="color: var(--text-sub); line-height: 1.6;">
+                Hệ thống đã ghi nhận câu trả lời của bạn.<br>
+                Vui lòng giữ nguyên màn hình này để giám thị kiểm tra.
+            </p>
         </div>
     </div>
 
     <script>
         (() => {
             const startBtn = document.getElementById('startBtn');
+            const btnText = document.getElementById('btnText');
             const mssvInput = document.getElementById('mssv');
             const loginDiv = document.getElementById('login');
             const quizDiv = document.getElementById('quiz');
             const resultDiv = document.getElementById('result');
             const logEl = document.getElementById('log');
+            const connDot = document.getElementById('connDot');
+            const connText = document.getElementById('connText');
 
             let visitorId = null;
             let ws = null;
 
             function log(msg) { logEl.textContent = msg; }
 
+            function updateConnectionStatus(status) {
+                if (status === 'online') {
+                    connDot.className = 'dot online';
+                    connText.textContent = 'Server Online';
+                    connText.style.color = 'var(--success)';
+                } else {
+                    connDot.className = 'dot offline';
+                    connText.textContent = 'Disconnected';
+                    connText.style.color = 'var(--text-sub)';
+                }
+            }
+
             function initWebSocket() {
-                // --- SỬA LỖI TẠI ĐÂY: Xử lý trường hợp mở file trực tiếp ---
+                // Tự động nhận diện host (cho cả localhost và tunnel)
                 let host = window.location.host;
-                // Nếu host rỗng (do mở file://), mặc định trỏ về localhost:8080
                 if (!host) host = 'localhost:8080';
 
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -132,28 +320,41 @@
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = () => {
-                    log("WebSocket đã kết nối.");
+                    updateConnectionStatus('online');
+                    log("Đã kết nối máy chủ.");
                     checkReady();
                 };
+
                 ws.onmessage = (ev) => {
                     let data = {}; try { data = JSON.parse(ev.data); } catch (_) { }
+
                     if (data.status === 'OK') {
-                        loginDiv.style.display = 'none';
-                        quizDiv.style.display = 'block';
-                        renderQuiz();
-                    } else if (data.status === 'BLOCKED') {
-                        alert('CHẶN: ' + data.msg);
+                        // Hiệu ứng chuyển cảnh
+                        loginDiv.style.opacity = '0';
+                        setTimeout(() => {
+                            loginDiv.classList.add('hidden');
+                            quizDiv.classList.remove('hidden');
+                            renderQuiz();
+                        }, 200);
+                    }
+                    else if (data.status === 'BLOCKED') {
+                        alert('⛔ CẢNH BÁO: ' + data.msg);
                         window.location.reload();
                     }
                 };
-                ws.onclose = () => { log("Mất kết nối Server (Kiểm tra xem server đã bật chưa?)"); };
-                ws.onerror = (err) => { console.error("Socket error:", err); };
+
+                ws.onclose = () => {
+                    updateConnectionStatus('offline');
+                    log("Mất kết nối! Đang thử lại...");
+                    // Tự động reconnect sau 3s nếu mất mạng
+                    setTimeout(initWebSocket, 3000);
+                };
             }
 
             async function initFingerprint() {
-                log("Đang lấy Fingerprint...");
+                log("Đang xác thực thiết bị...");
                 let retries = 0;
-                // Chờ tối đa 3 giây
+                // Timeout 3s để tránh treo nút
                 while (!window.FingerprintJS && retries < 30) {
                     await new Promise(r => setTimeout(r, 100));
                     retries++;
@@ -164,14 +365,12 @@
                         const fp = await FingerprintJS.load();
                         const result = await fp.get();
                         visitorId = result.visitorId;
-                        log("Đã lấy được Device ID.");
                     } else {
                         throw new Error("Timeout");
                     }
                 } catch (e) {
-                    console.warn("Fingerprint blocked, using fallback.");
+                    console.warn("FP Blocked -> Using Fallback ID");
                     visitorId = "fallback-" + Math.random().toString(36).substring(2) + Date.now();
-                    log("Dùng ID dự phòng.");
                 }
                 checkReady();
             }
@@ -179,34 +378,74 @@
             function checkReady() {
                 if (visitorId && ws && ws.readyState === WebSocket.OPEN) {
                     startBtn.disabled = false;
-                    startBtn.textContent = "Bắt đầu làm bài";
-                    log("Sẵn sàng.");
+                    btnText.textContent = "Bắt đầu làm bài";
+                    log("Hệ thống sẵn sàng.");
+                } else {
+                    startBtn.disabled = true;
+                    btnText.textContent = "Đang kết nối...";
                 }
             }
 
             startBtn.addEventListener('click', () => {
                 const mssv = mssvInput.value.trim();
-                if (!mssv) return alert('Nhập MSSV!');
+                if (!mssv) {
+                    mssvInput.focus();
+                    mssvInput.style.borderColor = 'var(--error)';
+                    return;
+                }
+
+                // UI Feedback khi bấm nút
+                startBtn.disabled = true;
+                btnText.textContent = "Đang kiểm tra...";
+                mssvInput.style.borderColor = 'var(--border)';
+
                 ws.send(JSON.stringify({ type: 'LOGIN', mssv, fingerprint: visitorId }));
             });
 
+            // Hàm render câu hỏi (Đã làm đẹp hơn)
             function renderQuiz() {
                 quizDiv.innerHTML = `
-                <h2>Câu hỏi 1</h2><p>1 + 1 = ?</p>
-                <label class="quiz-option"><input type="radio" name="q1" value="A"> A. 1</label>
-                <label class="quiz-option"><input type="radio" name="q1" value="B"> B. 2</label>
-                <label class="quiz-option"><input type="radio" name="q1" value="C"> C. 3</label>
-                <label class="quiz-option"><input type="radio" name="q1" value="D"> D. 4</label>
-                <button id="submitBtn" style="margin-top:15px">Nộp bài</button>
+                <div class="quiz-question">Câu hỏi 1: Kết quả của phép tính 1 + 1 là bao nhiêu?</div>
+                
+                <label class="option-card">
+                    <input type="radio" name="q1" value="A">
+                    <span>A. 1</span>
+                </label>
+                <label class="option-card">
+                    <input type="radio" name="q1" value="B">
+                    <span>B. 2</span>
+                </label>
+                <label class="option-card">
+                    <input type="radio" name="q1" value="C">
+                    <span>C. 3</span>
+                </label>
+                <label class="option-card">
+                    <input type="radio" name="q1" value="D">
+                    <span>D. 4</span>
+                </label>
+                
+                <button id="submitBtn" style="margin-top: 25px;">Nộp bài thi</button>
             `;
+
                 document.getElementById('submitBtn').addEventListener('click', () => {
                     const checked = document.querySelector('input[name="q1"]:checked');
-                    if (!checked) return alert('Chọn đáp án!');
-                    ws.send(JSON.stringify({ type: 'SUBMIT', mssv: mssvInput.value.trim(), answer: checked.value }));
-                    quizDiv.style.display = 'none'; resultDiv.style.display = 'block';
+                    if (!checked) {
+                        alert("Vui lòng chọn một đáp án!");
+                        return;
+                    }
+
+                    ws.send(JSON.stringify({
+                        type: 'SUBMIT',
+                        mssv: mssvInput.value.trim(),
+                        answer: checked.value
+                    }));
+
+                    quizDiv.classList.add('hidden');
+                    resultDiv.classList.remove('hidden');
                 });
             }
 
+            // Boot
             initWebSocket();
             initFingerprint();
         })();

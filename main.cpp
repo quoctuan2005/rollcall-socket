@@ -10,39 +10,31 @@
 
 GameManager game;
 
-// Hàm đọc file index.html trả về chuỗi
-std::string load_html_file()
+// Hàm đọc file tổng quát
+std::string load_file(const std::string &filename)
 {
-    std::ifstream f("index.html");
+    std::ifstream f(filename);
     if (!f.is_open())
-        return "<h1>Error: index.html not found on server</h1>";
+        return "";
     std::stringstream buffer;
     buffer << f.rdbuf();
     return buffer.str();
 }
 
-// Logic kiểm tra IP
+// Logic Firewall
 bool is_ip_allowed(const std::string &ip)
 {
     if (ip.find("127.0.0.1") == 0)
         return true;
-
     if (ip.find("192.168.") == 0)
         return true;
-    return false;
+    if (ip.find("10.") == 0)
+        return true;
+    return false; // Chặn IP lạ
 }
 
-void client_thread(int sock, std::string ip)
+void client_thread(int sock, std::string socket_ip)
 {
-    if (!is_ip_allowed(ip))
-    {
-        // Vẫn cho họ xem trang Web để hiện thông báo lỗi, nhưng không cho Socket
-        // Hoặc đóng luôn cũng được. Ở đây đóng luôn cho bảo mật.
-        std::cout << "[BLOCKED] " << ip << std::endl;
-        close(sock);
-        return;
-    }
-
     std::string req;
     if (!read_http_request(sock, req))
     {
@@ -50,32 +42,47 @@ void client_thread(int sock, std::string ip)
         return;
     }
 
-    // --- PHÂN LOẠI KẾT NỐI ---
-    // Kiểm tra xem đây là yêu cầu Web (GET /) hay Socket (Upgrade)
+    std::string real_ip = socket_ip;
+    std::string forwarded = get_header_value(req, "X-Forwarded-For");
+    if (!forwarded.empty())
+        real_ip = forwarded.substr(0, forwarded.find(','));
 
-    // TRƯỜNG HỢP 1: YÊU CẦU TRANG WEB (HTTP GET)
+    // --- XỬ LÝ HTTP (TRANG WEB) ---
     if (req.find("Upgrade: websocket") == std::string::npos)
     {
-        std::string html = load_html_file();
-        std::string response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html; charset=utf-8\r\n"
-            "Content-Length: " +
-            std::to_string(html.size()) + "\r\n"
-                                          "Connection: close\r\n\r\n" +
-            html;
+        std::string content;
 
+        // ROUTING: Phân biệt trang chủ và trang Admin
+        // Nếu URL chứa "/admin" -> trả về admin.html
+        if (req.find("GET /admin ") != std::string::npos)
+        {
+            std::cout << "[ADMIN ACCESS] from " << real_ip << std::endl;
+            content = load_file("admin.html");
+            if (content.empty())
+                content = "<h1>Loi: Khong tim thay admin.html</h1>";
+        }
+        // Mặc định trả về index.html
+        else
+        {
+            content = load_file("index.html");
+            if (content.empty())
+                content = "<h1>Loi: Khong tim thay index.html</h1>";
+        }
+
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + std::to_string(content.size()) + "\r\nConnection: close\r\n\r\n" + content;
         send_all(sock, response);
-        close(sock); // Gửi xong HTML thì đóng kết nối ngay
+        close(sock);
         return;
     }
 
-    // TRƯỜNG HỢP 2: KẾT NỐI SOCKET (GAME)
+    // --- XỬ LÝ SOCKET ---
     if (!websocket_handshake(sock, req))
     {
         close(sock);
         return;
     }
+
+    // Mặc định add vào list client, nếu là admin thì sẽ move sau
     game.add_socket(sock);
 
     while (true)
@@ -89,21 +96,42 @@ void client_thread(int sock, std::string ip)
             continue;
 
         std::string type = get_json_str(frame.payload, "type");
-        if (type == "LOGIN")
+
+        // --- ADMIN LOGIN ---
+        if (type == "ADMIN_LOGIN")
         {
-            std::string mssv = get_json_str(frame.payload, "mssv");
-            std::string fp = get_json_str(frame.payload, "fingerprint");
-            std::string response = game.handle_login(ip, mssv, fp);
-            send_text_frame(sock, response);
+            // Chuyển socket này sang danh sách Admin để nhận thông báo
+            game.register_admin(sock);
+        }
+        else if (type == "LOGIN")
+        {
+            // Check IP khi Login
+            if (!is_ip_allowed(real_ip))
+            {
+                // Báo Admin biết có người bị chặn
+                game.log_block(real_ip, "Unknown", "IP không hợp lệ (Mạng lạ)");
+
+                std::string msg = "{\"status\":\"BLOCKED\",\"msg\":\"IP của bạn không được phép!\"}";
+                send_text_frame(sock, msg);
+            }
+            else
+            {
+                std::string mssv = get_json_str(frame.payload, "mssv");
+                std::string fp = get_json_str(frame.payload, "fingerprint");
+                std::string response = game.handle_login(real_ip, mssv, fp);
+                send_text_frame(sock, response);
+            }
         }
         else if (type == "SUBMIT")
         {
             std::string mssv = get_json_str(frame.payload, "mssv");
             std::string ans = get_json_str(frame.payload, "answer");
             std::cout << "[SUBMIT] " << mssv << " : " << ans << std::endl;
+
+            // Gửi dữ liệu sang Admin Dashboard
+            game.log_submission(mssv, real_ip, ans);
         }
     }
-
     game.remove_socket(sock);
     close(sock);
 }
@@ -118,10 +146,13 @@ int main()
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(8080);
-    bind(server_fd, (sockaddr *)&addr, sizeof(addr));
+    if (bind(server_fd, (sockaddr *)&addr, sizeof(addr)) < 0)
+        return 1;
     listen(server_fd, 20);
 
-    std::cout << "=== SERVER RUNNING (WEB + SOCKET) ON PORT 8080 ===" << std::endl;
+    std::cout << "=== SERVER ONLINE ===" << std::endl;
+    std::cout << "User Link: http://localhost:8080" << std::endl;
+    std::cout << "Admin Link: http://localhost:8080/admin" << std::endl;
 
     while (true)
     {
