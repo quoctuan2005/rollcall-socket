@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anti-Cheating Quiz System</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 0;
+            background: #f7f7fb;
+            color: #222;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 40px auto;
+            padding: 24px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.6rem;
+        }
+
+        .field {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .field input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .field button {
+            padding: 10px 16px;
+            border: none;
+            background: #0d9488;
+            color: #fff;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .field button:disabled {
+            background: #8ec9c6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            min-height: 60px;
+        }
+
+        .quiz {
+            margin-top: 24px;
+            display: none;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #334155;
+        }
+    </style>
+    <!-- FingerprintJS v3 CDN -->
+    <!-- FingerprintJS v3 CDN (deferred) -->
+    <script defer src="https://openfpcdn.io/fingerprintjs/v3/iife.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Hệ thống Trắc nghiệm Chống Gian lận</h1>
+        <div><span class="badge">WebSocket: ws://localhost:8080</span></div>
+
+        <div id="login" class="login">
+            <div class="field">
+                <input id="mssv" type="text" placeholder="Nhập MSSV (ví dụ: 2302xxxx)" />
+                <button id="startBtn" disabled>Bắt đầu làm bài</button>
+            </div>
+            <div class="status" id="status"></div>
+        </div>
+
+        <div id="quiz" class="quiz">
+            <h2>Bài Quiz</h2>
+            <p>Đã xác thực thành công. Chờ câu hỏi từ máy chủ...</p>
+        </div>
+    </div>
+
+    <!-- Defer local script to ensure FingerprintJS is available -->
+    <script defer src="./script.js"></script>
+</body>
+
+</html>
