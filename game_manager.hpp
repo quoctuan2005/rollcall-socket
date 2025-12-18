@@ -5,14 +5,17 @@
 #include <mutex>
 #include <algorithm>
 #include <iostream>
+#include <ctime>
 #include "ws_utils.hpp"
 
 class GameManager
 {
 private:
     std::mutex data_lock;
-    std::map<std::string, std::string> trusted_devices;
-    std::map<std::string, std::string> active_ips;
+    std::map<std::string, std::string> mssv_to_fingerprint;      // MSSV -> Fingerprint gốc
+    std::map<std::string, std::string> fingerprint_to_mssv;      // Fingerprint -> MSSV gốc
+    std::map<std::string, std::string> mssv_to_ip;               // MSSV -> IP gốc (lần đầu)
+    std::map<std::string, std::string> active_ips;               // IP -> MSSV hiện tại
 
     std::vector<int> client_sockets; // Socket sinh viên
     std::vector<int> admin_sockets;  // Socket Admin (để gửi báo cáo)
@@ -66,43 +69,66 @@ public:
         notify_admin(msg);
     }
 
+    // Ghi nhận gian lận (nhưng vẫn cho vào quiz) -> Báo Admin
+    void log_fraud(std::string ip, std::string mssv, std::string reason)
+    {
+        std::lock_guard<std::mutex> lock(data_lock);
+        std::string msg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"timestamp\":\"" + std::to_string(std::time(nullptr)) + "\"}";
+        notify_admin(msg);
+    }
+
     std::string handle_login(const std::string &ip, const std::string &mssv, const std::string &fp)
     {
         std::lock_guard<std::mutex> lock(data_lock);
 
-        // Logic check IP trùng
-        if (active_ips.count(ip) && active_ips[ip] != mssv)
+        // Kiểm tra: Fingerprint này đã dùng cho MSSV khác chưa? (1 máy không được 2 acc)
+        if (fingerprint_to_mssv.count(fp) && fingerprint_to_mssv[fp] != mssv)
         {
-            // BÁO ADMIN GIAN LẬN
-            std::string reason = "Chung IP với " + active_ips[ip];
-            std::string msg = "{\"type\":\"NEW_BLOCK\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\"}";
-            notify_admin(msg);
-
-            return "{\"status\":\"BLOCKED\",\"msg\":\"Gian lận IP: Máy này đang dùng cho SV khác!\"}";
+            std::string reason = "Thiết bị này đã đăng ký cho " + fingerprint_to_mssv[fp] + ". 1 máy chỉ cho 1 mã sinh viên!";
+            std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"CRITICAL\"}";
+            for (int sock : admin_sockets) {
+                send_text_frame(sock, fraudMsg);
+            }
+            active_ips[ip] = mssv;
+            return "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"same_device_multiple_accounts\"}";
         }
 
-        if (trusted_devices.find(mssv) == trusted_devices.end())
+        // Kiểm tra: MSSV này đã dùng FP khác chưa? (1 acc chỉ 1 thiết bị)
+        if (mssv_to_fingerprint.count(mssv) && mssv_to_fingerprint[mssv] != fp)
         {
-            trusted_devices[mssv] = fp;
+            std::string reason = "Tài khoản này đã dùng thiết bị khác: " + mssv_to_fingerprint[mssv];
+            std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"HIGH\"}";
+            for (int sock : admin_sockets) {
+                send_text_frame(sock, fraudMsg);
+            }
+            active_ips[ip] = mssv;
+            return "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"same_account_different_device\"}";
+        }
+
+        // Kiểm tra: MSSV này đã đăng ký từ IP khác chưa? (Lần đầu = lưu IP)
+        if (mssv_to_ip.count(mssv) && mssv_to_ip[mssv] != ip)
+        {
+            std::string reason = "Tài khoản này đã đăng ký từ IP: " + mssv_to_ip[mssv] + ", bây giờ từ: " + ip;
+            std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"CRITICAL\"}";
+            for (int sock : admin_sockets) {
+                send_text_frame(sock, fraudMsg);
+            }
+            active_ips[ip] = mssv;
+            return "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"different_ip\"}";
+        }
+
+        // Nếu cả hai chưa từng gặp: lần đầu đăng ký
+        if (mssv_to_fingerprint.find(mssv) == mssv_to_fingerprint.end())
+        {
+            mssv_to_fingerprint[mssv] = fp;
+            fingerprint_to_mssv[fp] = mssv;
+            mssv_to_ip[mssv] = ip;  // LƯU IP LẦN ĐẦU
             active_ips[ip] = mssv;
             return "{\"status\":\"OK\",\"msg\":\"Đăng ký thiết bị thành công.\"}";
         }
-        else
-        {
-            if (trusted_devices[mssv] == fp)
-            {
-                active_ips[ip] = mssv;
-                return "{\"status\":\"OK\",\"msg\":\"Xác thực thành công.\"}";
-            }
-            else
-            {
-                // BÁO ADMIN GIAN LẬN
-                std::string reason = "Sai Fingerprint (Thiết bị lạ)";
-                std::string msg = "{\"type\":\"NEW_BLOCK\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\"}";
-                notify_admin(msg);
 
-                return "{\"status\":\"BLOCKED\",\"msg\":\"CẢNH BÁO: Phát hiện đăng nhập từ thiết bị lạ!\"}";
-            }
-        }
+        // Nếu FP và MSSV đều khớp + IP khớp: xác thực thành công
+        active_ips[ip] = mssv;
+        return "{\"status\":\"OK\",\"msg\":\"Xác thực thành công.\"}";
     }
 };

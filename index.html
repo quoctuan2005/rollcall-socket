@@ -249,8 +249,8 @@
             <span id="connText">Connecting...</span>
         </div>
 
-        <h1>Bài Thi Trực Tuyến</h1>
-        <div class="subtitle">Hệ thống giám sát & chống gian lận</div>
+        <h1>Quiz điểm danh đầu giờ</h1>
+        <div class="subtitle">Trường Đại học Công Nghệ</div>
 
         <div id="login">
             <div class="form-group">
@@ -292,7 +292,10 @@
             const connText = document.getElementById('connText');
 
             let visitorId = null;
+            let lastFingerprint = null;
             let ws = null;
+            let fraudFlag = false;
+            let fraudType = null;
 
             function log(msg) { logEl.textContent = msg; }
 
@@ -329,7 +332,13 @@
                     let data = {}; try { data = JSON.parse(ev.data); } catch (_) { }
 
                     if (data.status === 'OK') {
-                        // Hiệu ứng chuyển cảnh
+                        // Nếu có fraud_flag, log cảnh báo (nhưng vẫn cho vào)
+                        if (data.fraud_flag === true || data.fraud_flag === 'true') {
+                            console.warn('⚠️ FRAUD ALERT:', data.msg, 'Type:', data.fraud_type);
+                            fraudFlag = true;
+                            fraudType = data.fraud_type || 'unknown';
+                        }
+                        // Hiệu ứng chuyển cảnh - LUÔN cho vào quiz
                         loginDiv.style.opacity = '0';
                         setTimeout(() => {
                             loginDiv.classList.add('hidden');
@@ -351,28 +360,77 @@
                 };
             }
 
-            async function initFingerprint() {
-                log("Đang xác thực thiết bị...");
-                let retries = 0;
-                // Timeout 3s để tránh treo nút
-                while (!window.FingerprintJS && retries < 30) {
-                    await new Promise(r => setTimeout(r, 100));
-                    retries++;
+            // Thu thập các feature khả thi trên web, và tạo một hardware-like hash (SHA-256)
+            async function collectFingerprint() {
+                function normalize(s) { return (s||'').toString().trim().toLowerCase(); }
+
+                function bufToHex(buffer) {
+                    return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2,'0')).join('');
                 }
 
+                async function sha256hex(msg) {
+                    const enc = new TextEncoder();
+                    const data = enc.encode(msg);
+                    const hash = await crypto.subtle.digest('SHA-256', data);
+                    return bufToHex(hash);
+                }
+
+                // Canvas fingerprint (simple)
+                function getCanvasFingerprint() {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 200; canvas.height = 50;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#f1f5f9'; ctx.fillRect(0,0,200,50);
+                        ctx.textBaseline = 'top';
+                        ctx.font = "16px 'Arial'";
+                        ctx.fillStyle = '#111';
+                        ctx.fillText('RollCall ' + navigator.userAgent, 2, 2);
+                        ctx.fillStyle = '#e11d48';
+                        ctx.fillRect(120,10,20,20);
+                        return canvas.toDataURL();
+                    } catch (e) { return ''; }
+                }
+
+                // WebGL renderer
+                function getWebGLInfo() {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                        if (!gl) return '';
+                        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                        if (dbg) return gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) + '|' + gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+                        return gl.getParameter(gl.RENDERER) || '';
+                    } catch (e) { return ''; }
+                }
+
+                const features = {
+                    userAgent: normalize(navigator.userAgent),
+                    platform: normalize(navigator.platform),
+                    hwConcurrency: navigator.hardwareConcurrency || null,
+                    deviceMemory: navigator.deviceMemory || null,
+                    languages: (navigator.languages || []).slice(0,3).map(normalize).join(','),
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+                    screen: `${screen.width}x${screen.height}x${screen.colorDepth}`,
+                    canvas: getCanvasFingerprint(),
+                    webgl: getWebGLInfo()
+                };
+
+                // If FingerprintJS available use it as additional input (visitorId string)
+                let fpVisitorId = '';
                 try {
                     if (window.FingerprintJS) {
                         const fp = await FingerprintJS.load();
-                        const result = await fp.get();
-                        visitorId = result.visitorId;
-                    } else {
-                        throw new Error("Timeout");
+                        const res = await fp.get();
+                        fpVisitorId = res.visitorId || '';
                     }
-                } catch (e) {
-                    console.warn("FP Blocked -> Using Fallback ID");
-                    visitorId = "fallback-" + Math.random().toString(36).substring(2) + Date.now();
-                }
-                checkReady();
+                } catch (e) { fpVisitorId = ''; }
+
+                // Build canonical string and hash it to produce hardware_hash
+                const canonical = [features.userAgent, features.platform, features.hwConcurrency, features.deviceMemory, features.languages, features.timezone, features.screen, features.webgl, features.canvas, fpVisitorId].join('||');
+                const hardware_hash = await sha256hex(canonical);
+
+                return { features, hardware_hash };
             }
 
             function checkReady() {
@@ -398,8 +456,12 @@
                 startBtn.disabled = true;
                 btnText.textContent = "Đang kiểm tra...";
                 mssvInput.style.borderColor = 'var(--border)';
+                
+                // RESET fraudFlag cho mỗi login mới
+                fraudFlag = false;
+                fraudType = null;
 
-                ws.send(JSON.stringify({ type: 'LOGIN', mssv, fingerprint: visitorId }));
+                ws.send(JSON.stringify({ type: 'LOGIN', mssv, fingerprint: { hardware_hash: visitorId, features: lastFingerprint } }));
             });
 
             // Hàm render câu hỏi (Đã làm đẹp hơn)
@@ -437,7 +499,9 @@
                     ws.send(JSON.stringify({
                         type: 'SUBMIT',
                         mssv: mssvInput.value.trim(),
-                        answer: checked.value
+                        answer: checked.value,
+                        fraud_flag: fraudFlag.toString(),
+                        fraud_type: fraudType || 'none'
                     }));
 
                     quizDiv.classList.add('hidden');
@@ -447,7 +511,23 @@
 
             // Boot
             initWebSocket();
-            initFingerprint();
+            // Collect a hardware-like fingerprint (best-effort on web)
+            (async () => {
+                try {
+                    const fp = await collectFingerprint();
+                    visitorId = fp.hardware_hash; // canonical hardware-like hash
+                    lastFingerprint = fp.features;
+                    // optionally expose features for debugging (do not send raw to server in production)
+                    console.log('fingerprint.features', fp.features);
+                    console.log('hardware_hash', visitorId);
+                    log('Thiết bị đã được xác thực (local).');
+                } catch (e) {
+                    visitorId = 'fp-fallback-' + Math.random().toString(36).slice(2);
+                    lastFingerprint = null;
+                    log('Không lấy được fingerprint chi tiết, dùng fallback.');
+                }
+                checkReady();
+            })();
         })();
     </script>
 </body>

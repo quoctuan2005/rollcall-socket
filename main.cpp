@@ -105,20 +105,24 @@ void client_thread(int sock, std::string socket_ip)
         }
         else if (type == "LOGIN")
         {
+            std::string mssv = get_json_str(frame.payload, "mssv");
+            std::string fp = get_json_str(frame.payload, "fingerprint");
+            
+            std::cout << "[LOGIN] MSSV=" << mssv << " | FP=" << fp.substr(0, 10) << "..." << std::endl;
+            
             // Check IP khi Login
             if (!is_ip_allowed(real_ip))
             {
-                // Báo Admin biết có người bị chặn
-                game.log_block(real_ip, "Unknown", "IP không hợp lệ (Mạng lạ)");
-
-                std::string msg = "{\"status\":\"BLOCKED\",\"msg\":\"IP của bạn không được phép!\"}";
+                // GHI LOG CẢNH BÁO - nhưng vẫn cho vào quiz
+                std::cout << "  -> Invalid IP detected!" << std::endl;
+                game.log_fraud(real_ip, mssv, "IP không hợp lệ (Mạng lạ)");
+                std::string msg = "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"invalid_ip\"}";
                 send_text_frame(sock, msg);
             }
             else
             {
-                std::string mssv = get_json_str(frame.payload, "mssv");
-                std::string fp = get_json_str(frame.payload, "fingerprint");
                 std::string response = game.handle_login(real_ip, mssv, fp);
+                std::cout << "  -> Response: " << response << std::endl;
                 send_text_frame(sock, response);
             }
         }
@@ -126,10 +130,24 @@ void client_thread(int sock, std::string socket_ip)
         {
             std::string mssv = get_json_str(frame.payload, "mssv");
             std::string ans = get_json_str(frame.payload, "answer");
-            std::cout << "[SUBMIT] " << mssv << " : " << ans << std::endl;
+            std::string fraud_flag = get_json_str(frame.payload, "fraud_flag");
+            std::string fraud_type = get_json_str(frame.payload, "fraud_type");
+            
+            std::cout << "[SUBMIT] " << mssv << " : " << ans << " | fraud_flag=" << fraud_flag << " | fraud_type=" << fraud_type << std::endl;
 
-            // Gửi dữ liệu sang Admin Dashboard
-            game.log_submission(mssv, real_ip, ans);
+            // Nếu có gian lận, gửi vào bảng gian lận
+            if (fraud_flag == "true")
+            {
+                std::cout << "  -> Ghi nhận GIAN LẬN!" << std::endl;
+                std::string reason = "Gian lận: " + fraud_type;
+                game.log_block(real_ip, mssv, reason);
+            }
+            else
+            {
+                std::cout << "  -> Ghi nhận BÌNH THƯỜNG" << std::endl;
+                // Gửi dữ liệu sang Admin Dashboard (danh sách bình thường)
+                game.log_submission(mssv, real_ip, ans);
+            }
         }
     }
     game.remove_socket(sock);
