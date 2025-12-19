@@ -31,16 +31,19 @@ std::string load_file(const std::string &filename)
     return "";  // File not found
 }
 
-// Logic Firewall
+// Logic Firewall - Chỉ cho phép mạng trường (10.11.x.x)
 bool is_ip_allowed(const std::string &ip)
 {
+    // localhost - cho phép (admin local)
     if (ip.find("127.0.0.1") == 0)
         return true;
-    if (ip.find("192.168.") == 0)
+    
+    // Mạng trường: 10.11.16.0/21 (10.11.16.0 - 10.11.23.255)
+    if (ip.find("10.11.") == 0)
         return true;
-    if (ip.find("10.") == 0)
-        return true;
-    return false; // Chặn IP lạ
+    
+    // Từ chối tất cả IP khác (WiFi nhà, mạng công cộng, VPN, v.v.)
+    return false;
 }
 
 void client_thread(int sock, std::string socket_ip)
@@ -120,13 +123,13 @@ void client_thread(int sock, std::string socket_ip)
             
             std::cout << "[LOGIN] MSSV=" << mssv << " | FP=" << fp.substr(0, 10) << "..." << std::endl;
             
-            // Check IP khi Login
+            // Check IP khi Login - ONLY campus network allowed
             if (!is_ip_allowed(real_ip))
             {
-                // GHI LOG CẢNH BÁO - nhưng vẫn cho vào quiz
-                std::cout << "  -> Invalid IP detected!" << std::endl;
-                game.log_fraud(real_ip, mssv, "IP không hợp lệ (Mạng lạ)");
-                std::string msg = "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"invalid_ip\"}";
+                // TỪ CHỐI - IP không phải mạng trường
+                std::cout << "  -> ❌ REJECTED: IP không từ mạng trường (" << real_ip << ")" << std::endl;
+                game.log_fraud(real_ip, mssv, "Cố gian lận từ mạng lạ: " + real_ip);
+                std::string msg = "{\"status\":\"ERROR\",\"msg\":\"❌ BẠN PHẢI SỬ DỤNG MẠNG CỦA TRƯỜNG!\\n\\nIP hiện tại: " + real_ip + "\\nMạng cho phép: 10.11.x.x\"}";
                 send_text_frame(sock, msg);
             }
             else
