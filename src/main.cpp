@@ -9,26 +9,26 @@
 #include "game_manager.hpp"
 
 GameManager game;
-
-// Hàm đọc file tổng quát
 std::string load_file(const std::string &filename)
 {
     // Paths để tìm file
     std::vector<std::string> paths = {
-        "web/" + filename,           // Chạy từ root
-        "../web/" + filename,        // Chạy từ build/
-        filename                     // Fallback
+        "web/" + filename,    // Chạy từ root
+        "../web/" + filename, // Chạy từ build/
+        filename              // Fallback
     };
-    
-    for (const auto &path : paths) {
+
+    for (const auto &path : paths)
+    {
         std::ifstream f(path);
-        if (f.is_open()) {
+        if (f.is_open())
+        {
             std::stringstream buffer;
             buffer << f.rdbuf();
             return buffer.str();
         }
     }
-    return "";  // File not found
+    return "";
 }
 
 // Logic Firewall
@@ -40,7 +40,7 @@ bool is_ip_allowed(const std::string &ip)
         return true;
     if (ip.find("10.") == 0)
         return true;
-    return false; // Chặn IP lạ
+    return false;
 }
 
 void client_thread(int sock, std::string socket_ip)
@@ -57,13 +57,9 @@ void client_thread(int sock, std::string socket_ip)
     if (!forwarded.empty())
         real_ip = forwarded.substr(0, forwarded.find(','));
 
-    // --- XỬ LÝ HTTP (TRANG WEB) ---
     if (req.find("Upgrade: websocket") == std::string::npos)
     {
         std::string content;
-
-        // ROUTING: Phân biệt trang chủ và trang Admin
-        // Nếu URL chứa "/admin" -> trả về admin.html
         if (req.find("GET /admin ") != std::string::npos)
         {
             std::cout << "[ADMIN ACCESS] from " << real_ip << std::endl;
@@ -85,14 +81,12 @@ void client_thread(int sock, std::string socket_ip)
         return;
     }
 
-    // --- XỬ LÝ SOCKET ---
     if (!websocket_handshake(sock, req))
     {
         close(sock);
         return;
     }
 
-    // Mặc định add vào list client, nếu là admin thì sẽ move sau
     game.add_socket(sock);
 
     while (true)
@@ -110,20 +104,18 @@ void client_thread(int sock, std::string socket_ip)
         // --- ADMIN LOGIN ---
         if (type == "ADMIN_LOGIN")
         {
-            // Chuyển socket này sang danh sách Admin để nhận thông báo
             game.register_admin(sock);
         }
         else if (type == "LOGIN")
         {
             std::string mssv = get_json_str(frame.payload, "mssv");
             std::string fp = get_json_str(frame.payload, "fingerprint");
-            
+
             std::cout << "[LOGIN] MSSV=" << mssv << " | FP=" << fp.substr(0, 10) << "..." << std::endl;
-            
+
             // Check IP khi Login
             if (!is_ip_allowed(real_ip))
             {
-                // GHI LOG CẢNH BÁO - nhưng vẫn cho vào quiz
                 std::cout << "  -> Invalid IP detected!" << std::endl;
                 game.log_fraud(real_ip, mssv, "IP không hợp lệ (Mạng lạ)");
                 std::string msg = "{\"status\":\"OK\",\"msg\":\"Đăng nhập thành công.\",\"fraud_flag\":true,\"fraud_type\":\"invalid_ip\"}";
@@ -142,10 +134,9 @@ void client_thread(int sock, std::string socket_ip)
             std::string ans = get_json_str(frame.payload, "answer");
             std::string fraud_flag = get_json_str(frame.payload, "fraud_flag");
             std::string fraud_type = get_json_str(frame.payload, "fraud_type");
-            
+
             std::cout << "[SUBMIT] " << mssv << " : " << ans << " | fraud_flag=" << fraud_flag << " | fraud_type=" << fraud_type << std::endl;
 
-            // Nếu có gian lận, gửi vào bảng gian lận
             if (fraud_flag == "true")
             {
                 std::cout << "  -> Ghi nhận GIAN LẬN!" << std::endl;
@@ -155,7 +146,6 @@ void client_thread(int sock, std::string socket_ip)
             else
             {
                 std::cout << "  -> Ghi nhận BÌNH THƯỜNG" << std::endl;
-                // Gửi dữ liệu sang Admin Dashboard (danh sách bình thường)
                 game.log_submission(mssv, real_ip, ans);
             }
         }

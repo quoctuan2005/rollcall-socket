@@ -12,13 +12,13 @@ class GameManager
 {
 private:
     std::mutex data_lock;
-    std::map<std::string, std::string> mssv_to_fingerprint;      // MSSV -> Fingerprint gốc
-    std::map<std::string, std::string> fingerprint_to_mssv;      // Fingerprint -> MSSV gốc
-    std::map<std::string, std::string> mssv_to_ip;               // MSSV -> IP gốc (lần đầu)
-    std::map<std::string, std::string> active_ips;               // IP -> MSSV hiện tại
+    std::map<std::string, std::string> mssv_to_fingerprint; // MSSV -> Fingerprint gốc
+    std::map<std::string, std::string> fingerprint_to_mssv; // Fingerprint -> MSSV gốc
+    std::map<std::string, std::string> mssv_to_ip;          // MSSV -> IP gốc (lần đầu)
+    std::map<std::string, std::string> active_ips;          // IP -> MSSV hiện tại
 
     std::vector<int> client_sockets; // Socket sinh viên
-    std::vector<int> admin_sockets;  // Socket Admin (để gửi báo cáo)
+    std::vector<int> admin_sockets;  // Socket Admin
 
 public:
     void add_socket(int sock)
@@ -45,8 +45,6 @@ public:
     // Gửi sự kiện cho Admin
     void notify_admin(const std::string &json_msg)
     {
-        // Lưu ý: Đã lock ở hàm gọi, hoặc lock tại đây nếu cần thiết.
-        // Ở đây ta giả định hàm gọi đã xử lý logic, ta chỉ gửi.
         for (int sock : admin_sockets)
         {
             send_text_frame(sock, json_msg);
@@ -86,7 +84,8 @@ public:
         {
             std::string reason = "Thiết bị này đã đăng ký cho " + fingerprint_to_mssv[fp] + ". 1 máy chỉ cho 1 mã sinh viên!";
             std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"CRITICAL\"}";
-            for (int sock : admin_sockets) {
+            for (int sock : admin_sockets)
+            {
                 send_text_frame(sock, fraudMsg);
             }
             active_ips[ip] = mssv;
@@ -98,7 +97,8 @@ public:
         {
             std::string reason = "Tài khoản này đã dùng thiết bị khác: " + mssv_to_fingerprint[mssv];
             std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"HIGH\"}";
-            for (int sock : admin_sockets) {
+            for (int sock : admin_sockets)
+            {
                 send_text_frame(sock, fraudMsg);
             }
             active_ips[ip] = mssv;
@@ -110,7 +110,8 @@ public:
         {
             std::string reason = "Tài khoản này đã đăng ký từ IP: " + mssv_to_ip[mssv] + ", bây giờ từ: " + ip;
             std::string fraudMsg = "{\"type\":\"NEW_FRAUD_ALERT\",\"ip\":\"" + ip + "\",\"mssv\":\"" + mssv + "\",\"reason\":\"" + reason + "\",\"severity\":\"CRITICAL\"}";
-            for (int sock : admin_sockets) {
+            for (int sock : admin_sockets)
+            {
                 send_text_frame(sock, fraudMsg);
             }
             active_ips[ip] = mssv;
@@ -122,7 +123,7 @@ public:
         {
             mssv_to_fingerprint[mssv] = fp;
             fingerprint_to_mssv[fp] = mssv;
-            mssv_to_ip[mssv] = ip;  // LƯU IP LẦN ĐẦU
+            mssv_to_ip[mssv] = ip; // LƯU IP LẦN ĐẦU
             active_ips[ip] = mssv;
             return "{\"status\":\"OK\",\"msg\":\"Đăng ký thiết bị thành công.\"}";
         }
