@@ -39,9 +39,9 @@ bool is_ip_allowed(const std::string &ip)
         return true;
     
     // Mạng trường: 10.11.16.0/21 (10.11.16.0 - 10.11.23.255)
-    if (ip.find("10.11.") == 0)
+    if (ip.find("123.31.") == 0)
         return true;
-    if (ip.find("10.") == 0)
+    if (ip.find("123.") == 0)
         return true;
     return false; // Chặn IP lạ
 }
