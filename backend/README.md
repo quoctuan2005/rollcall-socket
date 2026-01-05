@@ -1,0 +1,25 @@
+# Backend (C/C++)
+
+Thư mục này dành cho phần **backend C/C++** theo yêu cầu bài lập trình mạng.
+
+## Chạy nhanh server mẫu (C++)
+
+- Build:
+
+`g++ -std=c++17 -O2 -Wall -Wextra backend/server.cpp -o backend/server`
+
+- Run:
+
+`./backend/server 9000`
+
+Mặc định backend chạy HTTP ở `http://127.0.0.1:9000`.
+
+Frontend sẽ gọi qua HTTPS server Python bằng đường dẫn `/api/...` (Python sẽ reverse-proxy sang C++), để tránh CORS và để iPhone luôn ở HTTPS.
+
+## API (tạm thời)
+
+- `GET /api/health` -> `{ "ok": true }`
+- `POST /api/session/start` -> tạo session mới, trả `{ session_id, ttl_ms }`
+- `GET /api/token?bits=N` -> trả token bits hiện tại (có TTL), ví dụ `{ session_id, bits, expires_at_ms, now_ms, ttl_ms }`
+
+Mục tiêu: Sau khi chốt format gói tin điểm danh (session/token/deviceId/...), mình sẽ mở rộng các endpoint này để có `submit attendance`, `single-use`, fingerprint, v.v.

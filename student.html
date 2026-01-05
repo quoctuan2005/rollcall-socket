@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student - Nhận Âm Cao Tần</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="panel">
+            <h1>📱 NHẬN (Sinh Viên)</h1>
+
+            <div class="status">
+                <div class="status-indicator" id="receiverStatus"></div>
+                <span>Trạng thái: <strong id="receiverStatusText">Sẵn sàng</strong></span>
+            </div>
+
+            <h2>Cấu Hình Nhận</h2>
+            <div class="frequency-display">
+                <div class="freq-item">
+                    <label>Tần số cho "0"</label>
+                    <div class="control-group">
+                        <input type="number" id="recvFreq0" value="18000" min="15000" max="22000" step="100">
+                        <div class="freq-value" id="recvFreq0Display">18000 Hz</div>
+                    </div>
+                </div>
+                <div class="freq-item">
+                    <label>Tần số cho "1"</label>
+                    <div class="control-group">
+                        <input type="number" id="recvFreq1" value="20000" min="15000" max="22000" step="100">
+                        <div class="freq-value" id="recvFreq1Display">20000 Hz</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="sensitivity">Độ nhạy cảm (threshold):</label>
+                <input type="range" id="sensitivity" min="0.01" max="0.5" value="0.05" step="0.01">
+                <div class="slider-value" id="sensitivityDisplay">0.05</div>
+            </div>
+
+            <h2>Timing (khớp với giảng viên)</h2>
+            <div class="control-group">
+                <label for="duration">Độ dài mỗi tín hiệu (ms):</label>
+                <input type="range" id="duration" min="500" max="3000" value="1500" step="100">
+                <div class="slider-value" id="durationDisplay">1500 ms</div>
+            </div>
+
+            <div class="control-group">
+                <label for="bitDelay">Delay giữa các bit (ms):</label>
+                <input type="range" id="bitDelay" min="0" max="2000" value="800" step="100">
+                <div class="slider-value" id="bitDelayDisplay">800 ms</div>
+            </div>
+
+            <h2>Dữ Liệu Nhận</h2>
+            <div class="control-group">
+                <label>Bit nhận được:</label>
+                <div class="display-box empty" id="receivedBits">Chờ dữ liệu...</div>
+            </div>
+
+            <div class="control-group">
+                <label>Tần số đang phát hiện:</label>
+                <div class="display-box empty" id="detectedFrequency">-</div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="startReceiving()" id="recvBtn">🎤 Bắt Đầu Nhận</button>
+                <button class="btn-danger" onclick="stopReceiving()" id="stopRecvBtn" disabled>⏹️ Dừng</button>
+            </div>
+
+            <div class="button-group full">
+                <button class="btn-secondary" onclick="clearReceivedBits()">🗑️ Xóa Dữ Liệu</button>
+            </div>
+
+            <div class="info-text">
+                ℹ️ Ứng dụng sẽ sử dụng microphone để nhận âm thanh cao tần và giải mã thành các bit 0 và 1. Kiểm tra
+                rằng microphone của bạn được bật.
+            </div>
+
+            <div class="button-group full">
+                <a class="btn-secondary" href="/test.html" style="display:block;text-align:center;line-height:24px;">⬅️
+                    Quay lại</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/shared.js"></script>
+    <script src="/static/js/student.js"></script>
+</body>
+
+</html>
