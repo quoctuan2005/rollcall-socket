@@ -30,3 +30,6 @@ Frontend sẽ gọi qua HTTPS server Python bằng đường dẫn `/api/...` (P
 - `POST /api/attendance/submit` -> submit điểm danh (single-use theo time-slice), body JSON: `{ "student_id": "...", "bits": "0101..." }`
 
 Mục tiêu: Sau khi chốt format gói tin điểm danh (session/token/deviceId/...), mình sẽ mở rộng các endpoint này để có `submit attendance`, `single-use`, fingerprint, v.v.
+
+## FRONTEND
+- python3 server.py
