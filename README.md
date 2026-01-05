@@ -32,4 +32,5 @@ Frontend sẽ gọi qua HTTPS server Python bằng đường dẫn `/api/...` (P
 Mục tiêu: Sau khi chốt format gói tin điểm danh (session/token/deviceId/...), mình sẽ mở rộng các endpoint này để có `submit attendance`, `single-use`, fingerprint, v.v.
 
 ## FRONTEND
-- python3 server.py
+- Mở 1 terminal khác
+- `python3 server.py`
