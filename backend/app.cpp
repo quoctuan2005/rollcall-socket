@@ -25,6 +25,15 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
         return http_json(200, "{\"ok\":true}");
     }
 
+    if (req.method == "GET" && req.path == "/api/session")
+    {
+        const std::string body =
+            "{\"session_id\":\"" + json_escape(tokens.session_id()) +
+            "\",\"ttl_ms\":" + std::to_string(tokens.ttl_ms()) +
+            ",\"counter\":" + std::to_string(tokens.current_counter_now()) + "}";
+        return http_json(200, body);
+    }
+
     if (req.method == "POST" && req.path == "/api/session/start")
     {
         tokens.start_session();
@@ -68,13 +77,35 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
         const SubmitResult r = tokens.submit_attendance(student_id, bits);
         if (!r.ok)
         {
-            const int status = (r.error == "already_used") ? 409 : 401;
+            const int status = (r.error == "already_used" || r.error == "already_checked_in") ? 409 : 401;
             return http_json(status, "{\"ok\":false,\"error\":\"" + json_escape(r.error) + "\"}");
         }
 
         const std::string body =
             "{\"ok\":true,\"status\":\"accepted\",\"student_id\":\"" + json_escape(student_id) +
             "\",\"session_id\":\"" + json_escape(tokens.session_id()) + "\"}";
+        return http_json(200, body);
+    }
+
+    if (req.method == "GET" && req.path == "/api/attendance/list")
+    {
+        const auto list = tokens.attendance_list();
+        std::string attendees = "[";
+        for (size_t i = 0; i < list.size(); i++)
+        {
+            const auto &e = list[i];
+            attendees += "{\"student_id\":\"" + json_escape(e.student_id) +
+                         "\",\"at_ms\":" + std::to_string(e.at_ms) +
+                         ",\"counter\":" + std::to_string(e.counter) + "}";
+            if (i + 1 < list.size())
+                attendees += ",";
+        }
+        attendees += "]";
+
+        const std::string body =
+            "{\"ok\":true,\"session_id\":\"" + json_escape(tokens.session_id()) +
+            "\",\"count\":" + std::to_string(list.size()) +
+            ",\"attendees\":" + attendees + "}";
         return http_json(200, body);
     }
 

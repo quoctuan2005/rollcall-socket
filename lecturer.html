@@ -18,6 +18,28 @@
                 <span>Trạng thái: <strong id="emitterStatusText">Sẵn sàng</strong></span>
             </div>
 
+            <h2>Buổi Điểm Danh</h2>
+            <div class="control-group">
+                <label>Session hiện tại:</label>
+                <div class="display-box empty" id="sessionInfo">Chưa khởi tạo</div>
+            </div>
+            <div class="button-group full">
+                <button class="btn-primary" onclick="startSession()">🟢 Bắt Đầu Buổi (Reset)</button>
+            </div>
+
+            <h2>Danh Sách Điểm Danh</h2>
+            <div class="control-group">
+                <label>Đã điểm danh:</label>
+                <div class="display-box empty" id="attendanceCount">0</div>
+            </div>
+            <div class="control-group">
+                <label>Danh sách (mới nhất ở cuối):</label>
+                <div class="display-box empty" id="attendanceList">Chưa có dữ liệu...</div>
+            </div>
+            <div class="button-group full">
+                <button class="btn-primary" onclick="refreshAttendance()">🔄 Làm Mới Danh Sách</button>
+            </div>
+
             <h2>Cấu Hình Tần Số</h2>
             <div class="frequency-display">
                 <div class="freq-item">

@@ -3,6 +3,81 @@ let dataToEmit = [];
 let currentBitIndex = 0;
 let isEmitting = false;
 
+function updateSessionInfoText(data) {
+    const el = $('sessionInfo');
+    if (!el) return;
+
+    const sessionId = data && data.session_id ? String(data.session_id) : '';
+    const ttl = data && data.ttl_ms != null ? String(data.ttl_ms) : '';
+    const counter = data && data.counter != null ? String(data.counter) : '';
+
+    if (!sessionId) {
+        el.textContent = 'Chưa khởi tạo';
+        el.classList.add('empty');
+        return;
+    }
+
+    el.textContent = `session_id=${sessionId} | ttl_ms=${ttl || '?'} | counter=${counter || '?'}`;
+    el.classList.remove('empty');
+}
+
+async function startSession() {
+    try {
+        const resp = await fetch('/api/session/start', { method: 'POST' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        updateSessionInfoText(data);
+        await refreshAttendance();
+        await generateBits();
+    } catch (e) {
+        console.error('startSession error:', e);
+        alert('❌ Không thể bắt đầu buổi điểm danh. Hãy kiểm tra backend/Python server đang chạy.');
+    }
+}
+
+function setAttendanceUI({ countText, listText, isEmpty }) {
+    const countEl = $('attendanceCount');
+    const listEl = $('attendanceList');
+    if (countEl) {
+        countEl.textContent = countText;
+        if (isEmpty) countEl.classList.add('empty');
+        else countEl.classList.remove('empty');
+    }
+    if (listEl) {
+        listEl.textContent = listText;
+        if (isEmpty) listEl.classList.add('empty');
+        else listEl.classList.remove('empty');
+    }
+}
+
+async function refreshAttendance() {
+    try {
+        const resp = await fetch('/api/attendance/list');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        const attendees = Array.isArray(data.attendees) ? data.attendees : [];
+        const count = typeof data.count === 'number' ? data.count : attendees.length;
+
+        if (!attendees.length) {
+            setAttendanceUI({ countText: String(count), listText: 'Chưa có dữ liệu...', isEmpty: true });
+            return;
+        }
+
+        const lines = attendees.map((e, idx) => {
+            const sid = e && e.student_id ? String(e.student_id) : '?';
+            const at = e && typeof e.at_ms === 'number' ? new Date(e.at_ms) : null;
+            const time = at ? at.toLocaleTimeString('vi-VN') : '-';
+            return `${idx + 1}. ${sid} (${time})`;
+        });
+
+        setAttendanceUI({ countText: String(count), listText: lines.join('\n'), isEmpty: false });
+    } catch (e) {
+        console.error('refreshAttendance error:', e);
+        setAttendanceUI({ countText: '—', listText: 'Không tải được danh sách. Kiểm tra backend đang chạy.', isEmpty: true });
+    }
+}
+
 async function generateBits() {
     const userInput = $('dataToSend').value.trim();
 
@@ -20,6 +95,7 @@ async function generateBits() {
             const data = await resp.json();
             const bits = String(data.bits || '');
             if (!/^[01]+$/.test(bits)) throw new Error('Invalid bits from server');
+            updateSessionInfoText(data);
             dataToEmit = bits.split('');
         } catch (e) {
             console.warn('Fallback to local random bits:', e);
@@ -65,11 +141,10 @@ async function emitBit(bit) {
 }
 
 async function startEmitting() {
-    const userInput = $('dataToSend').value.trim();
-    if (!userInput) {
-        // Auto mode: refresh token right before emitting to avoid expiry.
-        await generateBits();
-    }
+    // Always sync data right before emitting.
+    // - If input is non-empty: uses the typed bits.
+    // - If input is empty: fetches a fresh token from backend.
+    await generateBits();
 
     if (dataToEmit.length === 0) {
         alert('⚠️ Hãy tạo dữ liệu trước!');
@@ -129,6 +204,14 @@ window.addEventListener('load', () => {
     $('bitDelay').addEventListener('input', (e) => {
         $('bitDelayDisplay').textContent = e.target.value + ' ms';
     });
+
+    // Initialize session display (no reset) if backend is reachable.
+    fetch('/api/session')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => updateSessionInfoText(data))
+        .catch(() => { });
+
+    refreshAttendance();
 
     generateBits();
 });

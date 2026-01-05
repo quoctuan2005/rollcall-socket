@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 struct TokenState
 {
@@ -27,6 +28,13 @@ struct SubmitResult
     std::string error; // empty when ok=true
 };
 
+struct AttendanceEntry
+{
+    std::string student_id;
+    std::int64_t at_ms = 0;
+    std::int64_t counter = 0;
+};
+
 class TokenService
 {
 public:
@@ -39,6 +47,9 @@ public:
     TokenResponse get_token(int nbits);
     SubmitResult submit_attendance(const std::string &student_id, const std::string &bits);
 
+    std::vector<AttendanceEntry> attendance_list() const;
+    std::int64_t current_counter_now() const;
+
 private:
     void ensure_session();
     std::int64_t current_counter(std::int64_t now) const;
@@ -48,6 +59,8 @@ private:
     std::string secret_;
     TokenState state_;
     std::unordered_map<std::string, std::int64_t> used_counter_by_student_;
+    std::unordered_map<std::string, AttendanceEntry> checked_in_by_student_;
+    std::vector<AttendanceEntry> attendance_log_;
 };
 
 std::string read_secret_from_env();

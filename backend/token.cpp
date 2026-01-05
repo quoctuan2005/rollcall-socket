@@ -84,6 +84,8 @@ void TokenService::start_session()
 {
     state_.session_id = "S" + std::to_string(now_ms());
     used_counter_by_student_.clear();
+    checked_in_by_student_.clear();
+    attendance_log_.clear();
 }
 
 std::int64_t TokenService::current_counter(std::int64_t now) const
@@ -123,16 +125,55 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
     const std::int64_t now = now_ms();
     const std::int64_t counter = current_counter(now);
 
-    const std::string expected = make_bits(state_.session_id, counter, static_cast<int>(bits.size()));
-    if (bits != expected)
+    // One attendance per student per session (practical rollcall constraint)
+    if (checked_in_by_student_.find(student_id) != checked_in_by_student_.end())
+        return SubmitResult{false, "already_checked_in"};
+
+    // Grace window: accept current counter or previous counter to reduce expiry edge failures.
+    std::optional<std::int64_t> matched_counter;
+    {
+        const std::string expected_now = make_bits(state_.session_id, counter, static_cast<int>(bits.size()));
+        if (bits == expected_now)
+        {
+            matched_counter = counter;
+        }
+        else if (counter > 0)
+        {
+            const std::string expected_prev = make_bits(state_.session_id, counter - 1, static_cast<int>(bits.size()));
+            if (bits == expected_prev)
+                matched_counter = counter - 1;
+        }
+    }
+
+    if (!matched_counter)
         return SubmitResult{false, "invalid_token"};
+
+    const std::int64_t used_counter = *matched_counter;
 
     if (auto it = used_counter_by_student_.find(student_id); it != used_counter_by_student_.end())
     {
-        if (it->second == counter)
+        if (it->second == used_counter)
             return SubmitResult{false, "already_used"};
     }
 
-    used_counter_by_student_[student_id] = counter;
+    used_counter_by_student_[student_id] = used_counter;
+
+    AttendanceEntry entry;
+    entry.student_id = student_id;
+    entry.at_ms = now;
+    entry.counter = used_counter;
+    checked_in_by_student_[student_id] = entry;
+    attendance_log_.push_back(entry);
     return SubmitResult{true, ""};
+}
+
+std::vector<AttendanceEntry> TokenService::attendance_list() const
+{
+    return attendance_log_;
+}
+
+std::int64_t TokenService::current_counter_now() const
+{
+    const std::int64_t now = now_ms();
+    return current_counter(now);
 }
