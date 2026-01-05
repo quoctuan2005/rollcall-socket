@@ -60,9 +60,13 @@ function startFrequencyDetection() {
     const freq1 = parseInt($('recvFreq1').value);
     const sensitivity = parseFloat($('sensitivity').value);
 
-    let lastDetectedTime = 0;
+    // Reduce lingering energy between frames (helps prevent duplicate detections)
+    analyser.smoothingTimeConstant = 0;
+
+    let lastSampleTime = 0;
+    // Add a small margin because the emitter has scheduling overhead (~50ms)
     const detectionInterval =
-        parseInt($('duration').value) + parseInt($('bitDelay').value);
+        parseInt($('duration').value) + parseInt($('bitDelay').value) + 80;
 
     const detect = () => {
         if (!isReceiving) return;
@@ -78,10 +82,12 @@ function startFrequencyDetection() {
 
         const currentTime = Date.now();
 
-        if (currentTime - lastDetectedTime > detectionInterval) {
-            let detectedBit = null;
-            let detectedFreq = null;
+        // Per-frame detection result
+        let detectedBit = null;
+        let detectedFreq = null;
 
+        // Sample at a fixed cadence to avoid counting the same long tone multiple times.
+        if (currentTime - lastSampleTime >= detectionInterval) {
             if (energy0 > sensitivity && energy0 > energy1) {
                 detectedBit = '0';
                 detectedFreq = freq0;
@@ -94,11 +100,21 @@ function startFrequencyDetection() {
                 receivedBits.push(detectedBit);
                 $('receivedBits').textContent = receivedBits.join('');
                 $('receivedBits').classList.remove('empty');
-                lastDetectedTime = currentTime;
-
-                $('detectedFrequency').textContent =
-                    `${detectedFreq} Hz (0: ${energy0.toFixed(2)}, 1: ${energy1.toFixed(2)})`;
             }
+
+            // Always advance the sample clock, even if no bit was detected,
+            // otherwise the sampler can drift and later "burst" multiple detections.
+            lastSampleTime = currentTime;
+        }
+
+        if (detectedFreq !== null) {
+            $('detectedFrequency').textContent =
+                `${detectedFreq} Hz (0: ${energy0.toFixed(2)}, 1: ${energy1.toFixed(2)})`;
+            $('detectedFrequency').classList.remove('empty');
+        } else {
+            $('detectedFrequency').textContent =
+                `- (0: ${energy0.toFixed(2)}, 1: ${energy1.toFixed(2)})`;
+            $('detectedFrequency').classList.add('empty');
         }
 
         animationId = requestAnimationFrame(detect);
@@ -128,6 +144,68 @@ function clearReceivedBits() {
     $('receivedBits').classList.add('empty');
     $('detectedFrequency').textContent = '-';
     $('detectedFrequency').classList.add('empty');
+
+    if ($('submitStatus')) {
+        $('submitStatus').textContent = '-';
+        $('submitStatus').classList.add('empty');
+    }
+}
+
+async function submitAttendance() {
+    try {
+        const studentIdEl = $('studentId');
+        const statusEl = $('submitStatus');
+        const bits = receivedBits.join('');
+        const studentId = (studentIdEl?.value || '').trim();
+
+        if (!studentId) {
+            alert('⚠️ Vui lòng nhập mã số sinh viên.');
+            return;
+        }
+        if (!bits) {
+            alert('⚠️ Chưa có dữ liệu bit để gửi. Hãy bắt đầu nhận trước.');
+            return;
+        }
+
+        if (statusEl) {
+            statusEl.textContent = 'Đang gửi...';
+            statusEl.classList.remove('empty');
+        }
+
+        const resp = await fetch('/api/attendance/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: studentId, bits }),
+        });
+
+        let data = null;
+        try {
+            data = await resp.json();
+        } catch {
+            // ignore
+        }
+
+        if (!resp.ok) {
+            const err = (data && data.error) ? String(data.error) : `HTTP ${resp.status}`;
+            if (statusEl) {
+                statusEl.textContent = `❌ Thất bại: ${err}`;
+                statusEl.classList.remove('empty');
+            }
+            return;
+        }
+
+        if (statusEl) {
+            statusEl.textContent = '✅ Điểm danh thành công!';
+            statusEl.classList.remove('empty');
+        }
+    } catch (e) {
+        console.error('submitAttendance error:', e);
+        const statusEl = $('submitStatus');
+        if (statusEl) {
+            statusEl.textContent = '❌ Lỗi khi gửi điểm danh.';
+            statusEl.classList.remove('empty');
+        }
+    }
 }
 
 // ===== EVENT LISTENERS =====

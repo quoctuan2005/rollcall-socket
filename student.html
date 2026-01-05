@@ -45,20 +45,35 @@
             <h2>Timing (khớp với giảng viên)</h2>
             <div class="control-group">
                 <label for="duration">Độ dài mỗi tín hiệu (ms):</label>
-                <input type="range" id="duration" min="500" max="3000" value="1500" step="100">
-                <div class="slider-value" id="durationDisplay">1500 ms</div>
+                <input type="range" id="duration" min="500" max="3000" value="500" step="100">
+                <div class="slider-value" id="durationDisplay">500 ms</div>
             </div>
 
             <div class="control-group">
                 <label for="bitDelay">Delay giữa các bit (ms):</label>
-                <input type="range" id="bitDelay" min="0" max="2000" value="800" step="100">
-                <div class="slider-value" id="bitDelayDisplay">800 ms</div>
+                <input type="range" id="bitDelay" min="0" max="2000" value="0" step="100">
+                <div class="slider-value" id="bitDelayDisplay">0 ms</div>
             </div>
 
             <h2>Dữ Liệu Nhận</h2>
             <div class="control-group">
                 <label>Bit nhận được:</label>
                 <div class="display-box empty" id="receivedBits">Chờ dữ liệu...</div>
+            </div>
+
+            <h2>Điểm Danh</h2>
+            <div class="control-group">
+                <label for="studentId">Mã số sinh viên:</label>
+                <input type="text" id="studentId" placeholder="VD: 20201234" autocomplete="off">
+            </div>
+
+            <div class="button-group full">
+                <button class="btn-primary" onclick="submitAttendance()" id="submitBtn">✅ Gửi Điểm Danh</button>
+            </div>
+
+            <div class="control-group">
+                <label>Kết quả:</label>
+                <div class="display-box empty" id="submitStatus">-</div>
             </div>
 
             <div class="control-group">

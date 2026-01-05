@@ -38,6 +38,48 @@ static std::string random_bits(int nbits)
     return s;
 }
 
+// NOTE: This is a lightweight keyed-hash for a student project/demo.
+// For production-grade security, replace with HMAC-SHA256.
+static std::uint64_t fnv1a64(const std::string &s)
+{
+    std::uint64_t h = 1469598103934665603ull;
+    for (unsigned char c : s)
+    {
+        h ^= static_cast<std::uint64_t>(c);
+        h *= 1099511628211ull;
+    }
+    return h;
+}
+
+static std::string u64_to_bits(std::uint64_t x)
+{
+    std::string bits;
+    bits.reserve(64);
+    for (int i = 63; i >= 0; i--)
+    {
+        bits.push_back(((x >> i) & 1ull) ? '1' : '0');
+    }
+    return bits;
+}
+
+static std::string make_token_bits(const std::string &secret, const std::string &session_id, std::int64_t counter, int nbits)
+{
+    std::string out;
+    out.reserve(static_cast<size_t>(nbits));
+    int block = 0;
+    while (static_cast<int>(out.size()) < nbits)
+    {
+        const std::string msg = secret + "|" + session_id + "|" + std::to_string(counter) + "|" + std::to_string(block);
+        const std::uint64_t h = fnv1a64(msg);
+        out += u64_to_bits(h);
+        block++;
+        if (block > 16)
+            break;
+    }
+    out.resize(static_cast<size_t>(nbits));
+    return out;
+}
+
 struct HttpRequest
 {
     std::string method;
@@ -198,12 +240,19 @@ static std::unordered_map<std::string, std::string> parse_query(const std::strin
 struct TokenState
 {
     std::string session_id;
-    std::string bits;
-    std::int64_t expires_at_ms = 0;
-    int ttl_ms = 10000;
+    int ttl_ms = 8000;
 };
 
 static TokenState g_token;
+static std::unordered_map<std::string, std::int64_t> g_used_counter_by_student;
+
+static const std::string g_secret = []
+{
+    const char *env = std::getenv("ROLLCALL_SECRET");
+    if (env && *env)
+        return std::string(env);
+    return std::string("dev-secret-change-me");
+}();
 
 static void ensure_session()
 {
@@ -212,15 +261,44 @@ static void ensure_session()
     g_token.session_id = "S" + std::to_string(now_ms());
 }
 
-static void refresh_token_if_needed(int nbits)
+static std::int64_t current_counter(std::int64_t now)
 {
-    ensure_session();
-    const std::int64_t now = now_ms();
-    if (g_token.bits.empty() || now >= g_token.expires_at_ms)
+    return now / g_token.ttl_ms;
+}
+
+static std::int64_t counter_expires_at_ms(std::int64_t counter)
+{
+    return (counter + 1) * g_token.ttl_ms;
+}
+
+static std::optional<std::string> json_get_string(const std::string &body, const std::string &key)
+{
+    const std::string needle = "\"" + key + "\"";
+    size_t pos = body.find(needle);
+    if (pos == std::string::npos)
+        return std::nullopt;
+    pos = body.find(':', pos + needle.size());
+    if (pos == std::string::npos)
+        return std::nullopt;
+    pos = body.find('"', pos);
+    if (pos == std::string::npos)
+        return std::nullopt;
+    size_t end = body.find('"', pos + 1);
+    if (end == std::string::npos)
+        return std::nullopt;
+    return body.substr(pos + 1, end - (pos + 1));
+}
+
+static bool is_bits01(const std::string &s)
+{
+    if (s.empty())
+        return false;
+    for (char c : s)
     {
-        g_token.bits = random_bits(nbits);
-        g_token.expires_at_ms = now + g_token.ttl_ms;
+        if (c != '0' && c != '1')
+            return false;
     }
+    return true;
 }
 
 static std::string http_json(int status, const std::string &json_body)
@@ -246,8 +324,7 @@ static std::string handle_request(const HttpRequest &req)
     if (req.method == "POST" && req.path == "/api/session/start")
     {
         g_token.session_id = "S" + std::to_string(now_ms());
-        g_token.bits.clear();
-        g_token.expires_at_ms = 0;
+        g_used_counter_by_student.clear();
         const std::string body =
             "{\"session_id\":\"" + json_escape(g_token.session_id) + "\",\"ttl_ms\":" + std::to_string(g_token.ttl_ms) + "}";
         return http_json(200, body);
@@ -261,14 +338,59 @@ static std::string handle_request(const HttpRequest &req)
         {
             nbits = std::max(1, std::min(256, std::atoi(it->second.c_str())));
         }
-        refresh_token_if_needed(nbits);
         const std::int64_t now = now_ms();
+        ensure_session();
+        const std::int64_t counter = current_counter(now);
+        const std::int64_t expires_at = counter_expires_at_ms(counter);
+        const std::string bits = make_token_bits(g_secret, g_token.session_id, counter, nbits);
         const std::string body =
             "{\"session_id\":\"" + json_escape(g_token.session_id) +
-            "\",\"bits\":\"" + json_escape(g_token.bits) +
-            "\",\"expires_at_ms\":" + std::to_string(g_token.expires_at_ms) +
+            "\",\"bits\":\"" + json_escape(bits) +
+            "\",\"expires_at_ms\":" + std::to_string(expires_at) +
             ",\"now_ms\":" + std::to_string(now) +
-            ",\"ttl_ms\":" + std::to_string(g_token.ttl_ms) + "}";
+            ",\"ttl_ms\":" + std::to_string(g_token.ttl_ms) +
+            ",\"counter\":" + std::to_string(counter) + "}";
+        return http_json(200, body);
+    }
+
+    if (req.method == "POST" && req.path == "/api/attendance/submit")
+    {
+        const std::int64_t now = now_ms();
+        ensure_session();
+        const std::int64_t counter = current_counter(now);
+
+        const auto student_id_opt = json_get_string(req.body, "student_id");
+        const auto bits_opt = json_get_string(req.body, "bits");
+        if (!student_id_opt || !bits_opt)
+        {
+            return http_json(400, "{\"ok\":false,\"error\":\"bad_request\"}");
+        }
+
+        const std::string student_id = *student_id_opt;
+        const std::string bits = *bits_opt;
+        if (student_id.empty() || !is_bits01(bits) || bits.size() > 256)
+        {
+            return http_json(400, "{\"ok\":false,\"error\":\"invalid_input\"}");
+        }
+
+        const std::string expected = make_token_bits(g_secret, g_token.session_id, counter, static_cast<int>(bits.size()));
+        if (bits != expected)
+        {
+            return http_json(401, "{\"ok\":false,\"error\":\"invalid_token\"}");
+        }
+
+        if (auto it = g_used_counter_by_student.find(student_id); it != g_used_counter_by_student.end())
+        {
+            if (it->second == counter)
+            {
+                return http_json(409, "{\"ok\":false,\"error\":\"already_used\"}");
+            }
+        }
+
+        g_used_counter_by_student[student_id] = counter;
+        const std::string body =
+            "{\"ok\":true,\"status\":\"accepted\",\"student_id\":\"" + json_escape(student_id) +
+            "\",\"session_id\":\"" + json_escape(g_token.session_id) + "\"}";
         return http_json(200, body);
     }
 
@@ -307,7 +429,8 @@ int main(int argc, char **argv)
     }
 
     std::cout << "[backend] HTTP server listening on http://127.0.0.1:" << port << "\n";
-    std::cout << "[backend] Endpoints: GET /api/health, POST /api/session/start, GET /api/token?bits=N\n";
+    std::cout << "[backend] Endpoints: GET /api/health, POST /api/session/start, GET /api/token?bits=N, POST /api/attendance/submit\n";
+    std::cout << "[backend] TTL(ms): " << g_token.ttl_ms << " (set secret via ROLLCALL_SECRET env)\n";
 
     while (true)
     {

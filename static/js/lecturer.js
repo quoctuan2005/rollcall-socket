@@ -65,6 +65,12 @@ async function emitBit(bit) {
 }
 
 async function startEmitting() {
+    const userInput = $('dataToSend').value.trim();
+    if (!userInput) {
+        // Auto mode: refresh token right before emitting to avoid expiry.
+        await generateBits();
+    }
+
     if (dataToEmit.length === 0) {
         alert('⚠️ Hãy tạo dữ liệu trước!');
         return;
