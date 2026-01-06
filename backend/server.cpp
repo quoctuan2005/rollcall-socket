@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <cstdlib>
 
 #include "app.h"
 #include "http.h"
@@ -23,7 +24,21 @@ int main(int argc, char **argv)
     if (argc >= 2)
         port = std::stoi(argv[1]);
 
-    TokenService tokens(read_secret_from_env(), 8000);
+    int ttl_ms = 30000;
+    if (const char *env = std::getenv("ROLLCALL_TTL_MS"))
+    {
+        try
+        {
+            const int v = std::stoi(env);
+            if (v >= 1000 && v <= 300000)
+                ttl_ms = v;
+        }
+        catch (...)
+        {
+        }
+    }
+
+    TokenService tokens(read_secret_from_env(), ttl_ms);
 
     int server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
@@ -51,7 +66,7 @@ int main(int argc, char **argv)
 
     std::cout << "[backend] HTTP server listening on http://127.0.0.1:" << port << "\n";
     std::cout << "[backend] Endpoints: GET /api/health, POST /api/session/start, GET /api/token?bits=N, POST /api/attendance/submit\n";
-    std::cout << "[backend] TTL(ms): " << tokens.ttl_ms() << " (set secret via ROLLCALL_SECRET env)\n";
+    std::cout << "[backend] TTL(ms): " << tokens.ttl_ms() << " (set via ROLLCALL_TTL_MS, secret via ROLLCALL_SECRET)\n";
 
     while (true)
     {

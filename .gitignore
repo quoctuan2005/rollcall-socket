@@ -21,3 +21,6 @@ server_broker
 server_tcp
 cert.pem
 key.pem
+server.cpython-314.pyc
+server.cpython-312.pyc
+webauthn_credentials.json

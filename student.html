@@ -67,6 +67,19 @@
                 <input type="text" id="studentId" placeholder="VD: 20201234" autocomplete="off">
             </div>
 
+            <h2>Passkey (Lớp 3)</h2>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="registerPasskey()" id="registerPasskeyBtn">🔐 Đăng Ký
+                    Passkey</button>
+                <button class="btn-secondary" onclick="authPasskey()" id="authPasskeyBtn">🧑‍💻 Xác Thực
+                    Passkey</button>
+            </div>
+
+            <div class="control-group">
+                <label>Trạng thái Passkey:</label>
+                <div class="display-box empty" id="passkeyStatus">Chưa xác thực</div>
+            </div>
+
             <div class="button-group full">
                 <button class="btn-primary" onclick="submitAttendance()" id="submitBtn">✅ Gửi Điểm Danh</button>
             </div>

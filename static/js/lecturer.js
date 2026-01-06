@@ -68,7 +68,12 @@ async function refreshAttendance() {
             const sid = e && e.student_id ? String(e.student_id) : '?';
             const at = e && typeof e.at_ms === 'number' ? new Date(e.at_ms) : null;
             const time = at ? at.toLocaleTimeString('vi-VN') : '-';
-            return `${idx + 1}. ${sid} (${time})`;
+            const fpStatus = e && e.fingerprint_status ? String(e.fingerprint_status) : '';
+            const fpScore = e && e.fingerprint_score != null ? Number(e.fingerprint_score) : null;
+            const fpText = fpStatus
+                ? ` | fp=${fpStatus}${Number.isFinite(fpScore) && fpScore >= 0 ? ` (${fpScore}%)` : ''}`
+                : '';
+            return `${idx + 1}. ${sid} (${time})${fpText}`;
         });
 
         setAttendanceUI({ countText: String(count), listText: lines.join('\n'), isEmpty: false });
@@ -98,8 +103,9 @@ async function generateBits() {
             updateSessionInfoText(data);
             dataToEmit = bits.split('');
         } catch (e) {
-            console.warn('Fallback to local random bits:', e);
-            dataToEmit = Array.from({ length: count }, () => (Math.random() < 0.5 ? '0' : '1'));
+            console.error('Failed to fetch token from backend:', e);
+            alert('❌ Không lấy được token từ backend. Đừng phát random bits vì sinh viên sẽ luôn bị invalid_token.\n\nHãy kiểm tra: backend C++ đang chạy (./backend/server 9000) và Python gateway đang chạy.');
+            dataToEmit = [];
         }
     }
 

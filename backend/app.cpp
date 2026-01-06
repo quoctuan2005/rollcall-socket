@@ -74,16 +74,40 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
         if (student_id.empty() || !is_bits01(bits) || bits.size() > 256)
             return http_json(400, "{\"ok\":false,\"error\":\"invalid_input\"}");
 
-        const SubmitResult r = tokens.submit_attendance(student_id, bits);
+        // Layer 2 fingerprint payload (flat keys, no DB; stored in-memory per session)
+        Fingerprint fp;
+        fp.platform = json_get_string(req.body, "fp_platform").value_or("");
+        fp.timezone = json_get_string(req.body, "fp_tz").value_or("");
+        fp.language = json_get_string(req.body, "fp_lang").value_or("");
+        fp.screen_w = static_cast<int>(json_get_int(req.body, "fp_sw").value_or(0));
+        fp.screen_h = static_cast<int>(json_get_int(req.body, "fp_sh").value_or(0));
+        fp.dpr = json_get_double(req.body, "fp_dpr").value_or(0.0);
+        fp.hardware_concurrency = static_cast<int>(json_get_int(req.body, "fp_hc").value_or(0));
+        fp.device_memory = static_cast<int>(json_get_int(req.body, "fp_dm").value_or(0));
+        fp.touch = json_get_bool(req.body, "fp_touch").value_or(false);
+
+        // Require minimal fingerprint for Layer 2
+        if (fp.platform.empty() || fp.timezone.empty() || fp.language.empty() || fp.screen_w <= 0 || fp.screen_h <= 0 || fp.dpr <= 0.0)
+            return http_json(400, "{\"ok\":false,\"error\":\"missing_fingerprint\"}");
+
+        const SubmitResult r = tokens.submit_attendance(student_id, bits, fp);
         if (!r.ok)
         {
-            const int status = (r.error == "already_used" || r.error == "already_checked_in") ? 409 : 401;
-            return http_json(status, "{\"ok\":false,\"error\":\"" + json_escape(r.error) + "\"}");
+            const int status = (r.error == "already_used" || r.error == "already_checked_in" || r.error == "fingerprint_mismatch" || r.error == "fingerprint_conflict") ? 409 : 401;
+            std::string body = "{\"ok\":false,\"error\":\"" + json_escape(r.error) + "\"";
+            if (!r.fingerprint_status.empty())
+                body += ",\"fingerprint_status\":\"" + json_escape(r.fingerprint_status) + "\"";
+            if (r.fingerprint_score >= 0)
+                body += ",\"fingerprint_score\":" + std::to_string(r.fingerprint_score);
+            body += "}";
+            return http_json(status, body);
         }
 
         const std::string body =
             "{\"ok\":true,\"status\":\"accepted\",\"student_id\":\"" + json_escape(student_id) +
-            "\",\"session_id\":\"" + json_escape(tokens.session_id()) + "\"}";
+            "\",\"session_id\":\"" + json_escape(tokens.session_id()) +
+            "\",\"fingerprint_status\":\"" + json_escape(r.fingerprint_status) +
+            "\",\"fingerprint_score\":" + std::to_string(r.fingerprint_score) + "}";
         return http_json(200, body);
     }
 
@@ -96,7 +120,9 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
             const auto &e = list[i];
             attendees += "{\"student_id\":\"" + json_escape(e.student_id) +
                          "\",\"at_ms\":" + std::to_string(e.at_ms) +
-                         ",\"counter\":" + std::to_string(e.counter) + "}";
+                         ",\"counter\":" + std::to_string(e.counter) +
+                         ",\"fingerprint_status\":\"" + json_escape(e.fingerprint_status) +
+                         "\",\"fingerprint_score\":" + std::to_string(e.fingerprint_score) + "}";
             if (i + 1 < list.size())
                 attendees += ",";
         }

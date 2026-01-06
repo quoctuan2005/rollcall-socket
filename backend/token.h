@@ -25,7 +25,22 @@ struct TokenResponse
 struct SubmitResult
 {
     bool ok = false;
-    std::string error; // empty when ok=true
+    std::string error;              // empty when ok=true
+    std::string fingerprint_status; // enrolled | matched | mismatch | missing
+    int fingerprint_score = -1;     // 0..100, -1 if N/A
+};
+
+struct Fingerprint
+{
+    std::string platform;
+    std::string timezone;
+    std::string language;
+    int screen_w = 0;
+    int screen_h = 0;
+    double dpr = 0.0;
+    int hardware_concurrency = 0;
+    int device_memory = 0;
+    bool touch = false;
 };
 
 struct AttendanceEntry
@@ -33,6 +48,8 @@ struct AttendanceEntry
     std::string student_id;
     std::int64_t at_ms = 0;
     std::int64_t counter = 0;
+    std::string fingerprint_status;
+    int fingerprint_score = -1;
 };
 
 class TokenService
@@ -46,6 +63,7 @@ public:
     void start_session();
     TokenResponse get_token(int nbits);
     SubmitResult submit_attendance(const std::string &student_id, const std::string &bits);
+    SubmitResult submit_attendance(const std::string &student_id, const std::string &bits, const Fingerprint &fp);
 
     std::vector<AttendanceEntry> attendance_list() const;
     std::int64_t current_counter_now() const;
@@ -60,6 +78,7 @@ private:
     TokenState state_;
     std::unordered_map<std::string, std::int64_t> used_counter_by_student_;
     std::unordered_map<std::string, AttendanceEntry> checked_in_by_student_;
+    std::unordered_map<std::string, Fingerprint> fingerprint_baseline_by_student_;
     std::vector<AttendanceEntry> attendance_log_;
 };
 
