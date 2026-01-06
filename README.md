@@ -16,7 +16,7 @@ Hoặc từ trong thư mục `backend/`:
 
 - Run:
 
-`./server 9000`
+`./server`
 
 Mặc định backend chạy HTTP ở `http://127.0.0.1:9000`.
 
