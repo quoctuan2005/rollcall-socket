@@ -6,6 +6,76 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student - Nhận Âm Cao Tần</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .step-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            justify-content: center;
+        }
+
+        .step-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--gray-200);
+            border: 2px solid var(--gray-300);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--gray-700);
+            transition: all 0.3s;
+        }
+
+        .step-dot.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        .step-dot.completed {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+
+        .step-content {
+            display: none;
+        }
+
+        .step-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-title {
+            color: var(--primary);
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .step-description {
+            color: var(--gray-700);
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 
 <body>
@@ -18,102 +88,263 @@
                 <span>Trạng thái: <strong id="receiverStatusText">Sẵn sàng</strong></span>
             </div>
 
-            <h2>Cấu Hình Nhận</h2>
-            <div class="frequency-display">
-                <div class="freq-item">
-                    <label>Tần số cho "0"</label>
-                    <div class="control-group">
-                        <input type="number" id="recvFreq0" value="18000" min="15000" max="22000" step="100">
-                        <div class="freq-value" id="recvFreq0Display">18000 Hz</div>
-                    </div>
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step-dot active" id="step1Dot">1</div>
+                <div class="step-dot" id="step2Dot">2</div>
+                <div class="step-dot" id="step3Dot">3</div>
+            </div>
+
+            <!-- Step 1: Nhập Thông Tin -->
+            <div class="step-content active" id="step1">
+                <div class="step-title">Bước 1: Nhập Thông Tin</div>
+                <div class="step-description">Vui lòng nhập mã số sinh viên của bạn</div>
+
+                <div class="control-group">
+                    <label for="studentId">👤 Mã số sinh viên:</label>
+                    <input type="text" id="studentId" placeholder="VD: 20201234" autocomplete="off">
                 </div>
-                <div class="freq-item">
-                    <label>Tần số cho "1"</label>
-                    <div class="control-group">
-                        <input type="number" id="recvFreq1" value="20000" min="15000" max="22000" step="100">
-                        <div class="freq-value" id="recvFreq1Display">20000 Hz</div>
-                    </div>
+
+                <div class="button-group full">
+                    <button class="btn-primary" onclick="proceedToStep2()">Tiếp Tục →</button>
                 </div>
             </div>
 
-            <div class="control-group">
-                <label for="sensitivity">Độ nhạy cảm (threshold):</label>
-                <input type="range" id="sensitivity" min="0.01" max="0.5" value="0.05" step="0.01">
-                <div class="slider-value" id="sensitivityDisplay">0.05</div>
+            <!-- Step 2: Xác Thực Passkey -->
+            <div class="step-content" id="step2">
+                <div class="step-title">Bước 2: Xác Thực Passkey</div>
+                <div class="step-description">Đăng ký hoặc xác thực danh tính của bạn bằng Passkey</div>
+
+                <div class="control-group">
+                    <label>🔐 Trạng thái Passkey:</label>
+                    <div class="display-box empty" id="passkeyStatus">Chưa xác thực</div>
+                </div>
+
+                <div class="button-group full">
+                    <button class="btn-secondary" onclick="registerPasskey()">🔐 Đăng Ký Passkey</button>
+                </div>
+
+                <div class="button-group full">
+                    <button class="btn-secondary" onclick="authPasskey()">🧑‍💻 Xác Thực Passkey</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="proceedToStep3()" id="nextStep3Btn" disabled>Tiếp Tục →</button>
+                    <button class="btn-secondary" onclick="backToStep1()">← Quay Lại</button>
+                </div>
             </div>
 
-            <h2>Timing (khớp với giảng viên)</h2>
-            <div class="control-group">
-                <label for="duration">Độ dài mỗi tín hiệu (ms):</label>
-                <input type="range" id="duration" min="500" max="3000" value="500" step="100">
-                <div class="slider-value" id="durationDisplay">500 ms</div>
+            <!-- Step 3: Điểm Danh -->
+            <div class="step-content" id="step3">
+                <div class="step-title">Bước 3: Điểm Danh Bằng Tín Hiệu</div>
+                <div class="step-description">Bắt đầu nhận tín hiệu âm thanh từ giảng viên rồi gửi điểm danh</div>
+
+                <div class="control-group">
+                    <label>📊 Bit nhận được:</label>
+                    <div class="display-box empty" id="receivedBits">Chờ dữ liệu...</div>
+                </div>
+
+                <div class="control-group">
+                    <label>📈 Tần số đang phát hiện:</label>
+                    <div class="display-box empty" id="detectedFrequency">-</div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="startReceiving()" id="recvBtn">▶️ Bắt Đầu Nhận</button>
+                    <button class="btn-danger" onclick="stopReceiving()" id="stopRecvBtn" disabled>⏹️ Dừng</button>
+                </div>
+
+                <div class="control-group">
+                    <label>📤 Kết quả:</label>
+                    <div class="display-box empty" id="submitStatus">-</div>
+                </div>
+
+                <div class="button-group full">
+                    <button class="btn-primary" onclick="submitAttendance()" id="submitBtn">✅ Gửi Điểm Danh</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-secondary" onclick="backToStep2()">← Quay Lại</button>
+                    <button class="btn-secondary" onclick="resetAllSteps()">🔄 Bắt Đầu Lại</button>
+                </div>
             </div>
 
-            <div class="control-group">
-                <label for="bitDelay">Delay giữa các bit (ms):</label>
-                <input type="range" id="bitDelay" min="0" max="2000" value="0" step="100">
-                <div class="slider-value" id="bitDelayDisplay">0 ms</div>
+            <!-- Configuration Section -->
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--gray-200);">
+                <h2>Cấu Hình Nâng Cao (Tùy Chọn)</h2>
+
+                <details style="cursor: pointer;">
+                    <summary style="color: var(--gray-700); font-weight: 500; padding: 12px 0;">Mở rộng cấu hình...</summary>
+
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200);">
+                        <div style="background: var(--gray-50); padding: 16px; border-radius: 10px; margin-bottom: 20px;">
+                            <h3 style="color: var(--gray-700); font-size: 13px; margin-bottom: 12px; text-transform: uppercase; font-weight: 600;">Tần số nhận</h3>
+                            <div class="frequency-display">
+                                <div class="freq-item">
+                                    <label>🔵 Tần số cho "0"</label>
+                                    <div class="control-group">
+                                        <input type="number" id="recvFreq0" value="18000" min="15000" max="22000" step="100">
+                                        <div class="freq-value" id="recvFreq0Display">18000 Hz</div>
+                                    </div>
+                                </div>
+                                <div class="freq-item">
+                                    <label>🔴 Tần số cho "1"</label>
+                                    <div class="control-group">
+                                        <input type="number" id="recvFreq1" value="20000" min="15000" max="22000" step="100">
+                                        <div class="freq-value" id="recvFreq1Display">20000 Hz</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="sensitivity">🎚️ Độ nhạy cảm (threshold):</label>
+                            <input type="range" id="sensitivity" min="0.01" max="0.5" value="0.05" step="0.01">
+                            <div class="slider-value" id="sensitivityDisplay">0.05</div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="duration">⏱️ Độ dài mỗi tín hiệu (ms):</label>
+                            <input type="range" id="duration" min="500" max="3000" value="500" step="100">
+                            <div class="slider-value" id="durationDisplay">500 ms</div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="bitDelay">⏲️ Delay giữa các bit (ms):</label>
+                            <input type="range" id="bitDelay" min="0" max="2000" value="0" step="100">
+                            <div class="slider-value" id="bitDelayDisplay">0 ms</div>
+                        </div>
+
+                        <div class="button-group full">
+                            <button class="btn-secondary" onclick="clearReceivedBits()">🗑️ Xóa Dữ Liệu</button>
+                        </div>
+                    </div>
+                </details>
             </div>
 
-            <h2>Dữ Liệu Nhận</h2>
-            <div class="control-group">
-                <label>Bit nhận được:</label>
-                <div class="display-box empty" id="receivedBits">Chờ dữ liệu...</div>
-            </div>
-
-            <h2>Điểm Danh</h2>
-            <div class="control-group">
-                <label for="studentId">Mã số sinh viên:</label>
-                <input type="text" id="studentId" placeholder="VD: 20201234" autocomplete="off">
-            </div>
-
-            <h2>Passkey (Lớp 3)</h2>
-            <div class="button-group">
-                <button class="btn-secondary" onclick="registerPasskey()" id="registerPasskeyBtn">🔐 Đăng Ký
-                    Passkey</button>
-                <button class="btn-secondary" onclick="authPasskey()" id="authPasskeyBtn">🧑‍💻 Xác Thực
-                    Passkey</button>
-            </div>
-
-            <div class="control-group">
-                <label>Trạng thái Passkey:</label>
-                <div class="display-box empty" id="passkeyStatus">Chưa xác thực</div>
+            <div style="background: var(--gray-100); border-radius: 10px; padding: 12px 16px; margin: 20px 0; font-size: 13px; color: var(--gray-700); border-left: 4px solid var(--primary);">
+                💡 <strong>Gợi ý:</strong> Ứng dụng sẽ sử dụng microphone để nhận âm thanh cao tần và giải mã thành các bit 0 và 1. Kiểm tra rằng microphone được bật.
             </div>
 
             <div class="button-group full">
-                <button class="btn-primary" onclick="submitAttendance()" id="submitBtn">✅ Gửi Điểm Danh</button>
-            </div>
-
-            <div class="control-group">
-                <label>Kết quả:</label>
-                <div class="display-box empty" id="submitStatus">-</div>
-            </div>
-
-            <div class="control-group">
-                <label>Tần số đang phát hiện:</label>
-                <div class="display-box empty" id="detectedFrequency">-</div>
-            </div>
-
-            <div class="button-group">
-                <button class="btn-primary" onclick="startReceiving()" id="recvBtn">🎤 Bắt Đầu Nhận</button>
-                <button class="btn-danger" onclick="stopReceiving()" id="stopRecvBtn" disabled>⏹️ Dừng</button>
-            </div>
-
-            <div class="button-group full">
-                <button class="btn-secondary" onclick="clearReceivedBits()">🗑️ Xóa Dữ Liệu</button>
-            </div>
-
-            <div class="info-text">
-                ℹ️ Ứng dụng sẽ sử dụng microphone để nhận âm thanh cao tần và giải mã thành các bit 0 và 1. Kiểm tra
-                rằng microphone của bạn được bật.
-            </div>
-
-            <div class="button-group full">
-                <a class="btn-secondary" href="/test.html" style="display:block;text-align:center;line-height:24px;">⬅️
-                    Quay lại</a>
+                <a class="btn-secondary" href="/test.html" style="display:flex; text-align:center; line-height:18px; padding: 11px 20px;">⬅️ Quay lại trang chủ</a>
             </div>
         </div>
     </div>
+
+    <script>
+        // Step Management
+        let isPasskeyAuthenticated = false; // Track authentication status
+
+        function showStep(stepNumber) {
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`step${stepNumber}`).classList.add('active');
+
+            // Update step indicators
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(`step${i}Dot`);
+                if (i < stepNumber) {
+                    dot.classList.remove('active');
+                    dot.classList.add('completed');
+                } else if (i === stepNumber) {
+                    dot.classList.remove('completed');
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active', 'completed');
+                }
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function proceedToStep2() {
+            const studentId = document.getElementById('studentId').value.trim();
+            if (!studentId) {
+                alert('Vui lòng nhập mã số sinh viên');
+                return;
+            }
+            showStep(2);
+        }
+
+        function proceedToStep3() {
+            // Check if button is disabled (i.e., not authenticated)
+            const nextBtn = document.getElementById('nextStep3Btn');
+            if (nextBtn.disabled) {
+                alert('⚠️ Vui lòng xác thực Passkey trước khi tiếp tục\n(Bấm nút "🧑‍💻 Xác Thực Passkey")');
+                return;
+            }
+            showStep(3);
+        }
+
+        function backToStep1() {
+            isPasskeyAuthenticated = false;
+            document.getElementById('nextStep3Btn').disabled = true;
+            showStep(1);
+        }
+
+        function backToStep2() {
+            showStep(2);
+        }
+
+        function resetAllSteps() {
+            isPasskeyAuthenticated = false;
+            document.getElementById('studentId').value = '';
+            document.getElementById('passkeyStatus').textContent = 'Chưa xác thực';
+            document.getElementById('passkeyStatus').className = 'display-box empty';
+            document.getElementById('receivedBits').textContent = 'Chờ dữ liệu...';
+            document.getElementById('receivedBits').className = 'display-box empty';
+            document.getElementById('submitStatus').textContent = '-';
+            document.getElementById('submitStatus').className = 'display-box empty';
+            document.getElementById('nextStep3Btn').disabled = true;
+            showStep(1);
+        }
+
+        // Watch passkeyStatus element for changes
+        const passkeyStatusEl = document.getElementById('passkeyStatus');
+        const nextBtn = document.getElementById('nextStep3Btn');
+        
+        // Use MutationObserver to watch for text content changes
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    const text = passkeyStatusEl.textContent;
+                    console.log('[Pipeline] Passkey status changed:', text);
+                    
+                    // Check if authentication successful (has ✅ and "Đã xác thực" or "thành công")
+                    if (text && text.includes('✅') && (text.includes('Đã xác thực') || text.includes('thành công'))) {
+                        isPasskeyAuthenticated = true;
+                        nextBtn.disabled = false;
+                        console.log('[Pipeline] ✅ Passkey authenticated - Step 3 unlocked');
+                    } else if (text && (text.includes('❌') || text.includes('Chưa'))) {
+                        isPasskeyAuthenticated = false;
+                        nextBtn.disabled = true;
+                        console.log('[Pipeline] ❌ Passkey not authenticated - Step 3 locked');
+                    }
+                }
+            });
+        });
+
+        // Start observing
+        observer.observe(passkeyStatusEl, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            characterDataOldValue: true
+        });
+
+        // Callback functions (in case student.js tries to call them)
+        function onPasskeyAuthenticated() {
+            console.log('[Pipeline] Callback: onPasskeyAuthenticated()');
+            isPasskeyAuthenticated = true;
+            nextBtn.disabled = false;
+        }
+
+        function onPasskeyAuthFailed() {
+            console.log('[Pipeline] Callback: onPasskeyAuthFailed()');
+            isPasskeyAuthenticated = false;
+            nextBtn.disabled = true;
+        }
+    </script>
 
     <script src="/static/js/shared.js"></script>
     <script src="/static/js/student.js"></script>
