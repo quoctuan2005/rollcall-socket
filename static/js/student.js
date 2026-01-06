@@ -5,6 +5,47 @@ let mediaStream = null;
 let isReceiving = false;
 let receivedBits = [];
 
+// Some browsers/OSes allow only one tab/app to capture the mic at a time.
+// Use a simple cross-tab lock to avoid "silent" failures.
+const MIC_LOCK_KEY = 'rollcall_mic_lock_v1';
+const MIC_LOCK_TTL_MS = 2 * 60 * 1000;
+const TAB_ID = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Math.random()).slice(2);
+
+function nowMs() {
+    return Date.now();
+}
+
+function readMicLock() {
+    try {
+        const raw = localStorage.getItem(MIC_LOCK_KEY);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj !== 'object') return null;
+        if (!obj.ts || typeof obj.ts !== 'number') return null;
+        if (nowMs() - obj.ts > MIC_LOCK_TTL_MS) return null;
+        return obj;
+    } catch {
+        return null;
+    }
+}
+
+function canAcquireMicLock() {
+    const lock = readMicLock();
+    if (!lock) return true;
+    return lock.tabId === TAB_ID;
+}
+
+function acquireMicLock() {
+    localStorage.setItem(MIC_LOCK_KEY, JSON.stringify({ tabId: TAB_ID, ts: nowMs() }));
+}
+
+function releaseMicLock() {
+    const lock = readMicLock();
+    if (lock && lock.tabId === TAB_ID) {
+        localStorage.removeItem(MIC_LOCK_KEY);
+    }
+}
+
 let lastAuthToken = '';
 
 async function refreshPasskeyStatus() {
@@ -238,6 +279,13 @@ async function authPasskey() {
 
 async function startReceiving() {
     try {
+        if (!canAcquireMicLock()) {
+            alert('⚠️ Microphone đang được dùng bởi tab/cửa sổ khác.\n\nHãy quay lại tab đang nhận và bấm “Dừng”, hoặc đóng tab đó rồi thử lại.');
+            return;
+        }
+
+        acquireMicLock();
+
         mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 echoCancellation: false,
@@ -278,7 +326,12 @@ async function startReceiving() {
         startFrequencyDetection();
     } catch (error) {
         console.error('Lỗi:', error);
-        alert('❌ Lỗi: ' + error.message + '\n\nVui lòng thử reload trang và cho phép quyền truy cập microphone.');
+        const name = error && error.name ? String(error.name) : 'Error';
+        const msg = error && error.message ? String(error.message) : String(error);
+        const hint = (name === 'NotReadableError' || name === 'AbortError')
+            ? '\n\nGợi ý: mic có thể đang bị tab/app khác chiếm dụng. Hãy đóng tab khác hoặc dừng mic ở tab đó.'
+            : '\n\nVui lòng thử reload trang và cho phép quyền truy cập microphone.';
+        alert(`❌ ${name}: ${msg}${hint}`);
         stopReceiving();
     }
 }
@@ -367,6 +420,8 @@ function stopReceiving() {
     $('stopRecvBtn').disabled = true;
     $('receiverStatus').classList.remove('active');
     $('receiverStatusText').textContent = 'Sẵn sàng';
+
+    releaseMicLock();
 }
 
 function clearReceivedBits() {
@@ -512,4 +567,12 @@ window.addEventListener('load', () => {
 
     setPasskeyStatus('Chưa xác thực', true);
     refreshPasskeyStatus();
+});
+
+window.addEventListener('beforeunload', () => {
+    try {
+        stopReceiving();
+    } catch {
+        releaseMicLock();
+    }
 });
