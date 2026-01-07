@@ -208,6 +208,9 @@ async function registerPasskey() {
 
         setPasskeyStatus('✅ Đăng ký Passkey thành công', false);
         await refreshPasskeyStatus();
+        
+        // After successful registration, need to authenticate
+        console.log('[Pipeline] Registration done - you can now authenticate to proceed');
     } catch (e) {
         console.error('registerPasskey error:', e);
         setPasskeyStatus(`❌ ${formatWebAuthnError(e)}`, false);
@@ -269,10 +272,22 @@ async function authPasskey() {
 
         lastAuthToken = String(finishData.auth_token);
         setPasskeyStatus('✅ Đã xác thực Passkey (có hiệu lực ngắn)', false);
+        
+        // Notify pipeline that authentication succeeded
+        if (typeof onPasskeyAuthenticated === 'function') {
+            onPasskeyAuthenticated();
+        }
+        
         return lastAuthToken;
     } catch (e) {
         console.error('authPasskey error:', e);
         setPasskeyStatus(`❌ ${formatWebAuthnError(e)}`, false);
+        
+        // Notify pipeline that authentication failed
+        if (typeof onPasskeyAuthFailed === 'function') {
+            onPasskeyAuthFailed();
+        }
+        
         return '';
     }
 }

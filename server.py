@@ -74,6 +74,13 @@ def _get_rp_id(host_header: str) -> str:
     # host may include port
     if ":" in host:
         host = host.split(":", 1)[0]
+    
+    # WebAuthn requires valid domain, not raw IP
+    # Convert IP to sslip.io domain for WebAuthn compatibility
+    if host and all(c.isdigit() or c == '.' for c in host):
+        # This is an IP address, convert to sslip.io domain
+        host = host.replace('.', '-') + '.sslip.io'
+    
     return host or "localhost"
 
 
