@@ -281,6 +281,29 @@ Tuỳ chọn:
 
 ### 2) Run gateway HTTPS + UI (Python)
 
+#### Tạo `cert.pem` và `key.pem` (không commit lên GitHub)
+
+Do WebAuthn và quyền micro thường yêu cầu HTTPS, repo này chạy gateway bằng HTTPS và cần 2 file:
+
+- `cert.pem`
+- `key.pem`
+
+
+Script có sẵn:
+
+```bash
+./scripts/mkcert_dev.sh
+```
+
+Yêu cầu: cài `mkcert` và cài root CA của mkcert trên máy:
+
+```bash
+brew install mkcert
+mkcert -install
+```
+
+Script sẽ tạo `cert.pem`/`key.pem` ngay tại project root (đúng với cách `server.py` load cert).
+
 
 
 
@@ -343,6 +366,26 @@ Ví dụ import qua gateway HTTPS:
 curl -k -X POST https://localhost:8000/api/roster/import \
   --data-binary $'22123456,Nguyễn Văn A\n22123457,Trần Thị B\n'
 ```
+
+#### Import “danh sách sinh viên vào web” (để hiện trên trang giảng viên)
+
+1) Mở và sửa file mẫu (tuỳ ý thêm/bớt sinh viên):
+
+- `data/roster_sample.txt`
+
+2) Import file đó vào hệ thống (gateway sẽ forward vào backend SQLite):
+
+```bash
+curl -k -X POST https://localhost:8000/api/roster/import \
+  --data-binary @data/roster_sample.txt
+```
+
+3) Vào web để xem:
+
+- Mở `https://localhost:8000/lecturer.html`
+- Nhấn **Làm Mới Tiến Độ** (hoặc chờ auto refresh)
+
+Ghi chú: import là “upsert” — trùng MSSV thì cập nhật lại tên.
 
 
 
