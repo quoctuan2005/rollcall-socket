@@ -1,8 +1,4 @@
-# Backend (C/C++)
-
-Thư mục này dành cho phần **backend C/C++** theo yêu cầu bài lập trình mạng.
-
-## Chạy nhanh server mẫu (C++)
+## Chạy nhanh server (C++)
 
 - Build:
 
@@ -46,32 +42,3 @@ Mục tiêu: Sau khi chốt format gói tin điểm danh (session/token/deviceId
 
 Lưu ý: Lecturer sẽ **không** phát “random bits” nếu backend không chạy (để tránh sinh viên luôn bị `invalid_token`).
 
-## Android / Passkeys (WebAuthn) và HTTPS certificate
-
-Nếu trên Android bạn gặp lỗi:
-
-`NotAllowedError: WebAuthn is not supported on sites with TLS certificate errors`
-
-thì nghĩa là Chrome đang thấy **cảnh báo certificate** (self-signed, untrusted, hoặc sai host). WebAuthn/Passkeys sẽ bị chặn hoàn toàn trong trường hợp này.
-
-Cách làm đúng để demo trên LAN:
-
-- Tạo certificate dev “được tin cậy” bằng `mkcert`:
-	- Cài `mkcert`: `brew install mkcert`
-	- Cài root CA vào macOS: `mkcert -install`
-	- Chạy script trong project root: `./scripts/mkcert_dev.sh`
-		- Script sẽ tạo `cert.pem` và `key.pem` đúng tên mà `server.py` đang dùng.
-- Cài root CA lên Android:
-	- Trên Mac: lấy đường dẫn CA root bằng `mkcert -CAROOT`, rồi copy file `rootCA.pem` sang điện thoại.
-	- Trên Android: Settings → Security → Encryption & credentials → Install a certificate → CA certificate.
-- Mở đúng host khớp với certificate:
-	- Trên Android, WebAuthn/Passkeys thường **không cho dùng IP trực tiếp** làm domain (sẽ báo `SecurityError: this is an invalid domain`).
-	- Hãy dùng domain trỏ về IP LAN, ví dụ:
-		- `https://192.168.1.12.sslip.io:8000/student.html`
-		- hoặc `https://192-168-1-12.nip.io:8000/student.html`
-	- Script `./scripts/mkcert_dev.sh` đã tạo cert bao gồm các hostname kiểu `*.sslip.io` và `*.nip.io` tương ứng với IP LAN hiện tại.
-	- Không trộn `localhost` và LAN domain/IP giữa lúc đăng ký/xác thực.
-
-Ghi chú quan trọng (Android): một số máy/phiên bản Chrome/Google Play Services có thể **không chấp nhận CA do người dùng tự cài** cho WebAuthn, dù Chrome vẫn hiển thị HTTPS “hợp lệ”. Nếu bạn vẫn gặp `NotAllowedError: WebAuthn is not supported on sites with TLS certificate errors` sau khi đã cài `rootCA.pem`:
-
-- Cách chắc chắn nhất để demo Passkey trên Android là dùng **domain + certificate được tin cậy công khai** (ví dụ dùng tunnel như `ngrok`/`cloudflared` để có HTTPS thật).
