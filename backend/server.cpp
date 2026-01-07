@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 #include "app.h"
+#include "db.h"
 #include "http.h"
 #include "token.h"
 
@@ -39,6 +40,18 @@ int main(int argc, char **argv)
     }
 
     TokenService tokens(read_secret_from_env(), ttl_ms);
+
+    std::string db_path = "rollcall.db";
+    if (const char *env = std::getenv("ROLLCALL_DB_PATH"))
+    {
+        if (env && *env)
+            db_path = std::string(env);
+    }
+    RollcallDb db(db_path);
+    if (db.ok())
+        std::cout << "[backend] DB: " << db.path() << "\n";
+    else
+        std::cout << "[backend] DB: unavailable (sqlite open failed)\n";
 
     int server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
@@ -83,7 +96,7 @@ int main(int argc, char **argv)
             continue;
         }
 
-        const std::string resp = handle_request(*req, tokens);
+        const std::string resp = handle_request(*req, tokens, db);
         send_all(client_fd, resp);
         ::close(client_fd);
     }

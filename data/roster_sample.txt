@@ -1,0 +1,7 @@
+# Roster sample (edit freely)
+# Format: MSSV,Full Name
+22100001,Nguyễn Văn An
+22100002,Nguyễn Phòng Hai
+22100003,Nguyễn Quốc Tuấn
+22100004,Quế Thanh Hoa
+22100005,Trần Tê Hex

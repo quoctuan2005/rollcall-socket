@@ -1,10 +1,52 @@
 #include "app.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
+#include <cctype>
 #include <sstream>
+#include <vector>
 
 #include "json.h"
+
+static std::string trim(const std::string &s)
+{
+    size_t a = 0;
+    while (a < s.size() && std::isspace(static_cast<unsigned char>(s[a])))
+        a++;
+    size_t b = s.size();
+    while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1])))
+        b--;
+    return s.substr(a, b - a);
+}
+
+static std::vector<std::string> split_lines(const std::string &s)
+{
+    std::vector<std::string> out;
+    std::string cur;
+    cur.reserve(64);
+    for (char ch : s)
+    {
+        if (ch == '\r')
+            continue;
+        if (ch == '\n')
+        {
+            out.push_back(cur);
+            cur.clear();
+            continue;
+        }
+        cur.push_back(ch);
+    }
+    if (!cur.empty())
+        out.push_back(cur);
+    return out;
+}
+
+static std::int64_t wall_now_ms()
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
 
 static std::string http_json(int status, const std::string &json_body)
 {
@@ -18,7 +60,7 @@ static std::string http_json(int status, const std::string &json_body)
     return out.str();
 }
 
-std::string handle_request(const HttpRequest &req, TokenService &tokens)
+std::string handle_request(const HttpRequest &req, TokenService &tokens, RollcallDb &db)
 {
     if (req.method == "GET" && req.path == "/api/health")
     {
@@ -37,8 +79,81 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
     if (req.method == "POST" && req.path == "/api/session/start")
     {
         tokens.start_session();
+        if (db.ok())
+        {
+            db.ensure_session(tokens.session_id(), wall_now_ms());
+        }
         const std::string body =
             "{\"session_id\":\"" + json_escape(tokens.session_id()) + "\",\"ttl_ms\":" + std::to_string(tokens.ttl_ms()) + "}";
+        return http_json(200, body);
+    }
+
+    if (req.method == "POST" && req.path == "/api/roster/import")
+    {
+        // Body format (text/plain or any): one student per line:
+        //   MSSV,Full Name
+        // Blank lines and lines starting with # are ignored.
+        // This avoids needing a full JSON parser in the C++ demo backend.
+        if (!db.ok())
+            return http_json(500, "{\"ok\":false,\"error\":\"db_unavailable\"}");
+
+        int inserted = 0;
+        int skipped = 0;
+        for (const auto &raw_line : split_lines(req.body))
+        {
+            const std::string line = trim(raw_line);
+            if (line.empty() || (!line.empty() && line[0] == '#'))
+            {
+                skipped++;
+                continue;
+            }
+
+            const size_t comma = line.find(',');
+            if (comma == std::string::npos)
+            {
+                skipped++;
+                continue;
+            }
+            const std::string student_id = trim(line.substr(0, comma));
+            const std::string full_name = trim(line.substr(comma + 1));
+            if (student_id.empty())
+            {
+                skipped++;
+                continue;
+            }
+
+            inserted += db.upsert_student(student_id, full_name);
+        }
+
+        const std::string body =
+            "{\"ok\":true,\"inserted\":" + std::to_string(inserted) + ",\"skipped\":" + std::to_string(skipped) + "}";
+        return http_json(200, body);
+    }
+
+    if (req.method == "GET" && req.path == "/api/roster/list")
+    {
+        if (!db.ok())
+            return http_json(500, "{\"ok\":false,\"error\":\"db_unavailable\"}");
+
+        const auto session_id = tokens.session_id();
+        const auto rows = db.roster_with_status(session_id);
+        std::string students = "[";
+        for (size_t i = 0; i < rows.size(); i++)
+        {
+            const auto &r = rows[i];
+            students += "{\"student_id\":\"" + json_escape(r.student_id) +
+                        "\",\"full_name\":\"" + json_escape(r.full_name) +
+                        "\",\"present\":" + std::string(r.present ? "true" : "false") +
+                        ",\"at_ms\":" + std::to_string(r.at_ms) + "}";
+            if (i + 1 < rows.size())
+                students += ",";
+        }
+        students += "]";
+
+        const std::string body =
+            "{\"ok\":true,\"session_id\":\"" + json_escape(session_id) +
+            "\",\"count\":" + std::to_string(rows.size()) +
+            ",\"students\":" + students + "}";
         return http_json(200, body);
     }
 
@@ -101,6 +216,12 @@ std::string handle_request(const HttpRequest &req, TokenService &tokens)
                 body += ",\"fingerprint_score\":" + std::to_string(r.fingerprint_score);
             body += "}";
             return http_json(status, body);
+        }
+
+        if (db.ok())
+        {
+            db.ensure_session(tokens.session_id(), r.at_ms);
+            db.record_attendance(tokens.session_id(), student_id, r.at_ms, r.counter, r.fingerprint_status, r.fingerprint_score);
         }
 
         const std::string body =

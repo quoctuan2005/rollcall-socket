@@ -202,7 +202,7 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
 
     // One attendance per student per session (practical rollcall constraint)
     if (checked_in_by_student_.find(student_id) != checked_in_by_student_.end())
-        return SubmitResult{false, "already_checked_in", "", -1};
+        return SubmitResult{false, "already_checked_in", "", -1, 0, 0};
 
     // Grace window: accept current counter or previous counter to reduce expiry edge failures.
     std::optional<std::int64_t> matched_counter;
@@ -221,14 +221,14 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
     }
 
     if (!matched_counter)
-        return SubmitResult{false, "invalid_token", "", -1};
+        return SubmitResult{false, "invalid_token", "", -1, 0, 0};
 
     const std::int64_t used_counter = *matched_counter;
 
     if (auto it = used_counter_by_student_.find(student_id); it != used_counter_by_student_.end())
     {
         if (it->second == used_counter)
-            return SubmitResult{false, "already_used", "", -1};
+            return SubmitResult{false, "already_used", "", -1, 0, 0};
     }
 
     used_counter_by_student_[student_id] = used_counter;
@@ -239,7 +239,7 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
     entry.counter = used_counter;
     checked_in_by_student_[student_id] = entry;
     attendance_log_.push_back(entry);
-    return SubmitResult{true, "", "", -1};
+    return SubmitResult{true, "", "", -1, entry.at_ms, entry.counter};
 }
 
 SubmitResult TokenService::submit_attendance(const std::string &student_id, const std::string &bits, const Fingerprint &fp)
@@ -252,7 +252,7 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
     const std::int64_t counter = current_counter(now);
 
     if (checked_in_by_student_.find(student_id) != checked_in_by_student_.end())
-        return SubmitResult{false, "already_checked_in", "", -1};
+        return SubmitResult{false, "already_checked_in", "", -1, 0, 0};
 
     std::optional<std::int64_t> matched_counter;
     {
@@ -267,13 +267,13 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
         }
     }
     if (!matched_counter)
-        return SubmitResult{false, "invalid_token", "", -1};
+        return SubmitResult{false, "invalid_token", "", -1, 0, 0};
     const std::int64_t used_counter = *matched_counter;
 
     if (auto it = used_counter_by_student_.find(student_id); it != used_counter_by_student_.end())
     {
         if (it->second == used_counter)
-            return SubmitResult{false, "already_used", "", -1};
+            return SubmitResult{false, "already_used", "", -1, 0, 0};
     }
 
     // Layer 2: fingerprint fuzzy match (70% threshold)
@@ -295,7 +295,7 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
             const int conflict_threshold = 85;
             if (best >= conflict_threshold)
             {
-                return SubmitResult{false, "fingerprint_conflict", "conflict", best};
+                return SubmitResult{false, "fingerprint_conflict", "conflict", best, 0, 0};
             }
         }
 
@@ -311,14 +311,14 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
         used_counter_by_student_[student_id] = used_counter;
         checked_in_by_student_[student_id] = entry;
         attendance_log_.push_back(entry);
-        return SubmitResult{true, "", entry.fingerprint_status, entry.fingerprint_score};
+        return SubmitResult{true, "", entry.fingerprint_status, entry.fingerprint_score, entry.at_ms, entry.counter};
     }
 
     const int score = fingerprint_score_percent(it_base->second, fp);
     if (score < threshold)
     {
         // Do not record attendance
-        return SubmitResult{false, "fingerprint_mismatch", "mismatch", score};
+        return SubmitResult{false, "fingerprint_mismatch", "mismatch", score, 0, 0};
     }
 
     AttendanceEntry entry;
@@ -331,7 +331,7 @@ SubmitResult TokenService::submit_attendance(const std::string &student_id, cons
     used_counter_by_student_[student_id] = used_counter;
     checked_in_by_student_[student_id] = entry;
     attendance_log_.push_back(entry);
-    return SubmitResult{true, "", entry.fingerprint_status, entry.fingerprint_score};
+    return SubmitResult{true, "", entry.fingerprint_status, entry.fingerprint_score, entry.at_ms, entry.counter};
 }
 
 std::vector<AttendanceEntry> TokenService::attendance_list() const

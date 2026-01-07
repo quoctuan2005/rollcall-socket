@@ -28,6 +28,10 @@ struct SubmitResult
     std::string error;              // empty when ok=true
     std::string fingerprint_status; // enrolled | matched | mismatch | missing
     int fingerprint_score = -1;     // 0..100, -1 if N/A
+
+    // Populated when ok=true
+    std::int64_t at_ms = 0;
+    std::int64_t counter = 0;
 };
 
 struct Fingerprint

@@ -3,6 +3,74 @@ let dataToEmit = [];
 let currentBitIndex = 0;
 let isEmitting = false;
 
+let rosterPollTimer = null;
+
+function setRosterUI({ summaryText, listText, isEmpty }) {
+    const summaryEl = $('rosterSummary');
+    const listEl = $('rosterList');
+    if (summaryEl) {
+        summaryEl.textContent = summaryText;
+        if (isEmpty) summaryEl.classList.add('empty');
+        else summaryEl.classList.remove('empty');
+    }
+    if (listEl) {
+        listEl.textContent = listText;
+        if (isEmpty) listEl.classList.add('empty');
+        else listEl.classList.remove('empty');
+    }
+}
+
+async function refreshRoster() {
+    try {
+        const resp = await fetch('/api/roster/list');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        const students = Array.isArray(data.students) ? data.students : [];
+        if (!students.length) {
+            setRosterUI({
+                summaryText: 'Chưa có danh sách lớp (hãy import roster trước)',
+                listText: '—',
+                isEmpty: true,
+            });
+            return;
+        }
+
+        const presentCount = students.reduce((acc, s) => acc + (s && s.present ? 1 : 0), 0);
+        const total = students.length;
+
+        const lines = students.map((s, idx) => {
+            const sid = s && s.student_id ? String(s.student_id) : '?';
+            const name = s && s.full_name ? String(s.full_name) : '';
+            const at = s && typeof s.at_ms === 'number' && s.at_ms > 0 ? new Date(s.at_ms) : null;
+            const time = at ? at.toLocaleTimeString('vi-VN') : '-';
+            const mark = s && s.present ? '✅' : '⬜';
+            const displayName = name ? ` - ${name}` : '';
+            return `${idx + 1}. ${mark} ${sid}${displayName} (${time})`;
+        });
+
+        setRosterUI({
+            summaryText: `${presentCount}/${total} đã điểm danh`,
+            listText: lines.join('\n'),
+            isEmpty: false,
+        });
+    } catch (e) {
+        console.error('refreshRoster error:', e);
+        setRosterUI({
+            summaryText: '—',
+            listText: 'Không tải được roster. Kiểm tra backend DB + endpoint /api/roster/list.',
+            isEmpty: true,
+        });
+    }
+}
+
+function startRosterPolling() {
+    if (rosterPollTimer) return;
+    rosterPollTimer = setInterval(() => {
+        refreshRoster();
+    }, 2000);
+}
+
 function updateSessionInfoText(data) {
     const el = $('sessionInfo');
     if (!el) return;
@@ -28,6 +96,8 @@ async function startSession() {
         const data = await resp.json();
         updateSessionInfoText(data);
         await refreshAttendance();
+        await refreshRoster();
+        startRosterPolling();
         await generateBits();
     } catch (e) {
         console.error('startSession error:', e);
@@ -218,6 +288,9 @@ window.addEventListener('load', () => {
         .catch(() => { });
 
     refreshAttendance();
+
+    refreshRoster();
+    startRosterPolling();
 
     generateBits();
 });

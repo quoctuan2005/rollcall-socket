@@ -23,3 +23,6 @@ cert.pem
 key.pem
 *.pyc
 *.json
+
+*.sqlite
+*.sqlite3

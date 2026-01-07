@@ -40,6 +40,19 @@
                 <button class="btn-primary" onclick="refreshAttendance()">🔄 Làm Mới Danh Sách</button>
             </div>
 
+            <h2>Tiến độ theo danh sách lớp</h2>
+            <div class="control-group">
+                <label>📌 Trạng thái:</label>
+                <div class="display-box empty" id="rosterSummary">Chưa có dữ liệu...</div>
+            </div>
+            <div class="control-group">
+                <label>📋 Danh sách lớp (✅ = đã điểm danh):</label>
+                <div class="display-box empty" id="rosterList">—</div>
+            </div>
+            <div class="button-group full">
+                <button class="btn-primary" onclick="refreshRoster()">🔄 Làm Mới Tiến Độ</button>
+            </div>
+
             <h2>Cấu hình tần số</h2>
             <div style="background: var(--gray-50); padding: 16px; border-radius: 10px; margin-bottom: 20px;">
                 <div class="frequency-display">
@@ -104,12 +117,15 @@
                 <button class="btn-danger" onclick="stopEmitting()" id="stopEmitBtn" disabled>⏹️ Dừng Phát</button>
             </div>
 
-            <div style="background: var(--gray-100); border-radius: 10px; padding: 12px 16px; margin: 20px 0; font-size: 13px; color: var(--gray-700); border-left: 4px solid var(--primary);">
-                💡 <strong>Gợi ý:</strong> Hệ thống sẽ phát âm thanh cao tần để mã hóa bit. Hãy để độ âm lớn để sinh viên có thể bắt được rõ ràng.
+            <div
+                style="background: var(--gray-100); border-radius: 10px; padding: 12px 16px; margin: 20px 0; font-size: 13px; color: var(--gray-700); border-left: 4px solid var(--primary);">
+                💡 <strong>Gợi ý:</strong> Hệ thống sẽ phát âm thanh cao tần để mã hóa bit. Hãy để độ âm lớn để sinh
+                viên có thể bắt được rõ ràng.
             </div>
 
             <div class="button-group full">
-                <a class="btn-secondary" href="/test.html" style="display:flex; text-align:center; line-height:18px; padding: 11px 20px;">⬅️ Quay lại</a>
+                <a class="btn-secondary" href="/test.html"
+                    style="display:flex; text-align:center; line-height:18px; padding: 11px 20px;">⬅️ Quay lại</a>
             </div>
         </div>
     </div>
